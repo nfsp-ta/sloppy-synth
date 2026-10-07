@@ -5,6 +5,7 @@
  */
 #include "JuceHeader.h"
 #include "control_server.h"
+#include "crash_report.h"
 #include "json/json.h"
 #include "patch_library.h"
 #include "sloppy_engine.h"
@@ -322,6 +323,10 @@ namespace {
 }
 
 int main() {
+  crash_report::install();
+  std::cout << std::unitbuf;
+  std::cerr << std::unitbuf;
+
   struct Test { const char* name; void (*run)(); };
   const Test tests[] = {
     { "websocket accept key", testAcceptKey },
@@ -332,6 +337,7 @@ int main() {
 
   for (const Test& test : tests) {
     int before = failures;
+    std::cout << "run  " << test.name << "\n";
     test.run();
     std::cout << (failures == before ? "ok   " : "FAIL ") << test.name << "\n";
   }

@@ -18,7 +18,9 @@ add_test(NAME render_rejects_future_patch
 set_tests_properties(render_rejects_future_patch PROPERTIES WILL_FAIL TRUE)
 
 add_executable(control_tests control_tests.cpp)
-target_link_libraries(control_tests PRIVATE sloppy_engine)
+target_link_libraries(control_tests PRIVATE sloppy_engine ${CMAKE_DL_LIBS})
+# Exported symbols let the crash reporter name functions in CI logs.
+set_target_properties(control_tests PROPERTIES ENABLE_EXPORTS ON)
 target_compile_definitions(control_tests PRIVATE
   SLOPPY_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
   SLOPPY_WEB_DIR="${PROJECT_SOURCE_DIR}/web")
