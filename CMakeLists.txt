@@ -158,9 +158,11 @@ target_link_libraries(sloppy-render PRIVATE sloppy_engine)
 if(SLOPPY_WITH_AUDIO_DEVICES)
   add_executable(sloppy-synth apps/sloppy-synth/main.cpp)
   target_link_libraries(sloppy-synth PRIVATE sloppy_engine)
-  # The web UI is served from a "web" folder next to the program.
-  add_custom_command(TARGET sloppy-synth POST_BUILD
+  # The web UI is served from a "web" folder next to the program. Copied on
+  # every build, so edits to web/ show up without relinking the program.
+  add_custom_target(sloppy-synth-web ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web $<TARGET_FILE_DIR:sloppy-synth>/web)
+  add_dependencies(sloppy-synth-web sloppy-synth)
 endif()
 
 # ---------------------------------------------------------------------------

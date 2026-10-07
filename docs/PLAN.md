@@ -125,6 +125,12 @@ Decided: **A, the web UI** (Ashley, 2026-10-07). A first version is in
 `web/`: play page with macros and a multi-touch keyboard, patch browser, and
 edit pages driven by `web/layout.json`.
 
+Look: a neutral, slightly blue-gray dark theme rather than Vital's purple
+(Ashley, 2026-10-07). All colours are CSS variables at the top of
+`web/style.css`. Future work: several built-in themes and user-made themes
+(for example a theme file of those variables that can be picked, imported
+and shared from the UI).
+
 **A. Web UI (recommended).** HTML/JS served by the synth itself. One
 codebase covers phone portrait, tablet landscape and desktop with a
 responsive layout; works in Android's WebView; lets a phone edit a Pi over
@@ -173,7 +179,8 @@ Next:
 3. Control protocol and server in `sloppy-synth`. *(done, docs/PROTOCOL.md)*
 4. First web UI: patch browser, macros, a performance page, parameter
    pages. *(first version done)* Next: modulation matrix, envelope and LFO
-   shape views, oscilloscope, bank upload from the browser.
+   shape views, oscilloscope, bank upload from the browser, themes
+   (built-in and user-made).
 5. Encoder/small-screen UI on the Pi.
 6. Android app: NDK engine, Oboe, MIDI, WebView UI.
 7. Performance work: multi-core voices, NEON tuning.
