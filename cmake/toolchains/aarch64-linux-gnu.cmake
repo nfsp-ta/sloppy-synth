@@ -22,7 +22,7 @@ if(SLOPPY_SYSROOT)
   set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 endif()
 
-find_program(SLOPPY_QEMU qemu-aarch64)
+find_program(SLOPPY_QEMU NAMES qemu-aarch64 qemu-aarch64-static)
 if(SLOPPY_QEMU)
   if(SLOPPY_SYSROOT)
     set(CMAKE_CROSSCOMPILING_EMULATOR ${SLOPPY_QEMU} -L ${SLOPPY_SYSROOT})

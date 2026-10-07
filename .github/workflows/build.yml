@@ -38,7 +38,9 @@ jobs:
           if [ "${{ matrix.arch }}" = amd64 ]; then
             apt-get install -y --no-install-recommends build-essential
           else
-            apt-get install -y --no-install-recommends crossbuild-essential-${{ matrix.arch }} qemu-user
+            # The static qemu build: bookworm's dynamic qemu-user 7.2 crashes
+            # inside glibc's pthread_create when armhf tests start many threads.
+            apt-get install -y --no-install-recommends crossbuild-essential-${{ matrix.arch }} qemu-user-static
           fi
 
       - name: Configure
