@@ -20,6 +20,10 @@ parameter's `min`..`max` range.
 | `note` | `note` (0-127), `on` (default true), `velocity` (0-1), `channel` (1-16) | none |
 | `all_notes_off` | | none |
 | `load_patch` | `index` (from `patches`) | none on success (everyone gets `state`), else `error` |
+| `get_mod_info` | | `mod_info` |
+| `get_modulations` | | `modulations` |
+| `add_modulation` | `source`, `destination`, `amount` (-1 to 1, default 0.5) | none on success (everyone gets `modulations`), else `error`. An existing routing only gets the new amount. |
+| `remove_modulation` | `source`, `destination` | none on success (everyone gets `modulations`), else `error` |
 
 ## Synth to client
 
@@ -37,6 +41,15 @@ parameter's `min`..`max` range.
   `category` and `folders` (the folder path between the bank and the file,
   without Vital's `Presets` folder; UIs build their patch tree from `bank`
   plus `folders`).
+- `mod_info`: `sources` (modulation source names such as `lfo_1`, `env_2`,
+  `macro_control_1`, `velocity`) and `destinations` (parameter names that can
+  be modulated).
+- `modulations`: `modulations`, a list of `slot` (1-64), `source` and
+  `destination`. Sent to every client when a routing is added or removed or
+  a patch is loaded. A routing's depth and options are ordinary parameters
+  named after its slot, changed with `set` and reported in `params`:
+  `modulation_<slot>_amount` (-1 to 1), `_bipolar`, `_stereo`, `_bypass` and
+  `_power`.
 - `error`: `message`.
 
 ## Security

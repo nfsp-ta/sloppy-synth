@@ -13,6 +13,7 @@
 #include "JuceHeader.h"
 #include "synth_base.h"
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,15 @@ namespace sloppy {
     std::string units;
     // Names for indexed values (filter models, waveforms...), if any.
     std::vector<std::string> options;
+  };
+
+  // One routing in Vital's modulation matrix. Its depth and options are
+  // ordinary parameters named after the slot: modulation_<slot>_amount
+  // (-1 to 1), _bipolar, _stereo, _bypass and _power.
+  struct Modulation {
+    int slot = 0;              // 1 to 64
+    std::string source;        // e.g. "lfo_1", "env_2", "macro_control_1"
+    std::string destination;   // a parameter name, e.g. "filter_1_cutoff"
   };
 
   class Engine : public HeadlessSynth {
@@ -72,6 +82,19 @@ namespace sloppy {
       // when the host already has them in sample-accurate form.
       void addMidiMessage(const MidiMessage& message);
 
+      // Modulation matrix. Names are Vital's, as used in .vital files.
+      std::vector<std::string> getModulationSources();
+      std::vector<std::string> getModulationDestinations();
+      std::vector<Modulation> getModulations();
+      // Routes source to destination with the given amount (-1 to 1). If the
+      // routing exists already, only its amount changes. Fails when a name is
+      // unknown or all 64 slots are in use.
+      bool addModulation(const std::string& source, const std::string& destination, float amount,
+                         std::string& error);
+      bool removeModulation(const std::string& source, const std::string& destination);
+      // Changes whenever routings are added or removed, or a patch is loaded.
+      int getModulationGeneration() const { return modulation_generation_; }
+
       void allNotesOff();
       void setBpm(float bpm);
 
@@ -83,6 +106,7 @@ namespace sloppy {
       SpinLock midi_lock_;
       MidiBuffer incoming_midi_;
       MidiBuffer pending_midi_;
+      std::atomic<int> modulation_generation_ { 0 };
 
       JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)
   };

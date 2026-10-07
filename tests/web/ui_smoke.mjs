@@ -50,6 +50,20 @@ await page({ width: 390, height: 844 }, 'phone', async (p) => {
   await p.waitForTimeout(300);
   console.log('cutoff display:', await p.locator('.control', { hasText: 'Cutoff' }).locator('.control-value').textContent());
   await p.screenshot({ path: `${out}/phone-edit.png` });
+  // Route LFO 4 to oscillator 3's level on the Mod page, check it shows up on
+  // the LFO 4 page, then remove it.
+  await p.locator('.chip', { hasText: 'Mod' }).click();
+  await p.selectOption('select[aria-label="Modulation source"]', 'lfo_4');
+  await p.selectOption('select[aria-label="Modulation destination"]', 'osc_3_level');
+  await p.locator('.routes-add .pill', { hasText: 'Add' }).click();
+  await p.waitForSelector('.routing:has-text("LFO 4")');
+  await p.screenshot({ path: `${out}/phone-mod.png` });
+  await p.locator('.chip', { hasText: 'LFO' }).click();
+  await p.locator('.instance', { hasText: '4' }).click();
+  console.log('LFO 4 modulates:', await p.locator('.routes .routing-title').allTextContents());
+  await p.locator('.routes button[aria-label^="Remove"]').click();
+  await p.waitForSelector('.routes-empty');
+  console.log('after remove:', await p.locator('.routes-empty').textContent());
 });
 await page({ width: 1180, height: 820 }, 'tablet', async (p) => {
   await p.waitForTimeout(300);

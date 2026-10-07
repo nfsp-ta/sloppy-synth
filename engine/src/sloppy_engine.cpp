@@ -5,8 +5,11 @@
  */
 #include "sloppy_engine.h"
 
+#include <algorithm>
+
 #include "json/json.h"
 #include "load_save.h"
+#include "modulation_connection_processor.h"
 #include "sound_engine.h"
 #include "synth_parameters.h"
 
@@ -86,6 +89,7 @@ namespace sloppy {
       return false;
     }
     prepare(sample_rate_, vital::kMaxBufferSize);
+    ++modulation_generation_;
     return true;
   }
 
@@ -102,11 +106,13 @@ namespace sloppy {
       return false;
     }
     prepare(sample_rate_, vital::kMaxBufferSize);
+    ++modulation_generation_;
     return true;
   }
 
   void Engine::loadInitPatch() {
     loadInitPreset();
+    ++modulation_generation_;
   }
 
   std::vector<std::string> Engine::getParameterNames() const {
@@ -168,6 +174,79 @@ namespace sloppy {
   void Engine::addMidiMessage(const MidiMessage& message) {
     SpinLock::ScopedLockType lock(midi_lock_);
     incoming_midi_.addEvent(message, 0);
+  }
+
+  std::vector<std::string> Engine::getModulationSources() {
+    std::vector<std::string> names;
+    for (const auto& source : engine_->getModulationSources())
+      names.push_back(source.first);
+    std::sort(names.begin(), names.end());
+    return names;
+  }
+
+  std::vector<std::string> Engine::getModulationDestinations() {
+    std::vector<std::string> names;
+    for (const auto& destination : engine_->getMonoModulations())
+      names.push_back(destination.first);
+    std::sort(names.begin(), names.end());
+    return names;
+  }
+
+  std::vector<Modulation> Engine::getModulations() {
+    ScopedLock lock(getCriticalSection());
+    std::vector<Modulation> modulations;
+    vital::ModulationConnectionBank& bank = getModulationBank();
+    for (int i = 0; i < vital::kMaxModulationConnections; ++i) {
+      vital::ModulationConnection* connection = bank.atIndex(i);
+      if (!connection->source_name.empty() && !connection->destination_name.empty())
+        modulations.push_back({ i + 1, connection->source_name, connection->destination_name });
+    }
+    return modulations;
+  }
+
+  bool Engine::addModulation(const std::string& source, const std::string& destination, float amount,
+                             std::string& error) {
+    if (engine_->getModulationSources().count(source) == 0) {
+      error = "Unknown modulation source: " + source;
+      return false;
+    }
+    if (engine_->getMonoModulations().count(destination) == 0) {
+      error = "Can't modulate " + destination;
+      return false;
+    }
+
+    ScopedLock lock(getCriticalSection());
+    bool created = connectModulation(source, destination);
+    int index = getConnectionIndex(source, destination);
+    if (index < 0) {
+      if (static_cast<int>(getModulations().size()) >= vital::kMaxModulationConnections)
+        error = "All " + std::to_string(vital::kMaxModulationConnections) + " modulation slots are in use.";
+      else
+        error = "Can't route " + source + " to " + destination + ".";
+      return false;
+    }
+    std::string prefix = "modulation_" + std::to_string(index + 1) + "_";
+    if (created) {
+      // Same starting point as Vital's editor: a straight line map, no curve.
+      getModulationBank().atIndex(index)->modulation_processor->lineMapGenerator()->initLinear();
+      valueChanged(prefix + "power", 0.0f);
+      valueChanged(prefix + "stereo", 0.0f);
+      valueChanged(prefix + "bypass", 0.0f);
+    }
+    valueChanged(prefix + "amount", jlimit(-1.0f, 1.0f, amount));
+    ++modulation_generation_;
+    return true;
+  }
+
+  bool Engine::removeModulation(const std::string& source, const std::string& destination) {
+    ScopedLock lock(getCriticalSection());
+    int index = getConnectionIndex(source, destination);
+    if (index < 0)
+      return false;
+    disconnectModulation(source, destination);
+    valueChanged("modulation_" + std::to_string(index + 1) + "_amount", 0.0f);
+    ++modulation_generation_;
+    return true;
   }
 
   void Engine::allNotesOff() {

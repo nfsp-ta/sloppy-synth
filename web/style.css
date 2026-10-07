@@ -360,6 +360,7 @@ main {
 }
 .instance[aria-selected="true"] { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
 
+.switch[hidden] { display: none; }
 .switch {
   display: flex;
   align-items: center;
@@ -419,6 +420,62 @@ main {
 .control-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .control-value { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* ---- Modulation routings -------------------------------------------------- */
+.routes { grid-column: 1 / -1; }
+.routes-empty, .routes-count {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.routes-count { grid-column: 1 / -1; margin: 4px 4px 0; }
+.routes-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.routes-add select { flex: 1 1 200px; width: auto; }
+.routes-add .pill { flex: none; }
+.routing {
+  border-radius: var(--radius);
+}
+.routes .routing {
+  background: var(--panel-2);
+  padding: 8px 10px 10px;
+  margin-bottom: 8px;
+}
+.routing-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.routing-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-button.small {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+  color: var(--muted);
+}
+.control.bare { background: none; padding: 4px 0 0; }
+.toggles { margin-top: 4px; }
+.toggles button { min-height: 34px; font-size: 13px; }
+.mod-badge {
+  margin: -2px 0 4px;
+  color: var(--accent-2);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 input[type="range"] {
   width: 100%;
   height: 32px;
@@ -430,12 +487,14 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--panel-2) var(--fill, 0%));
+  background: linear-gradient(to right, var(--panel-2) var(--from, 0%), var(--accent) var(--from, 0%),
+              var(--accent) var(--fill, 0%), var(--panel-2) var(--fill, 0%));
 }
 input[type="range"]::-moz-range-track {
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--panel-2) var(--fill, 0%));
+  background: linear-gradient(to right, var(--panel-2) var(--from, 0%), var(--accent) var(--from, 0%),
+              var(--accent) var(--fill, 0%), var(--panel-2) var(--fill, 0%));
 }
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;

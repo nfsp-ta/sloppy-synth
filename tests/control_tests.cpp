@@ -10,7 +10,9 @@
 #include "patch_library.h"
 #include "sloppy_engine.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <iostream>
 
 using json = nlohmann::json;
@@ -122,6 +124,35 @@ namespace {
     CHECK(single(server, { { "type", "load_patch" }, { "index", 1 } })["type"] == "error");
     CHECK(single(server, { { "type", "load_patch" }, { "index", 9 } })["type"] == "error");
     CHECK(host.getCurrentPatchIndex() == 0);
+
+    json mod_info = single(server, { { "type", "get_mod_info" } });
+    CHECK(mod_info["type"] == "mod_info");
+    CHECK(std::find(mod_info["sources"].begin(), mod_info["sources"].end(), "lfo_1") != mod_info["sources"].end());
+    CHECK(std::find(mod_info["destinations"].begin(), mod_info["destinations"].end(), "filter_1_cutoff") !=
+          mod_info["destinations"].end());
+
+    size_t before = single(server, { { "type", "get_modulations" } })["modulations"].size();
+    CHECK(server.handleMessage(json({ { "type", "add_modulation" }, { "source", "lfo_2" },
+                                      { "destination", "filter_1_cutoff" }, { "amount", 0.3 } }).dump()).empty());
+    json mods = single(server, { { "type", "get_modulations" } });
+    CHECK(mods["modulations"].size() == before + 1);
+    json added;
+    for (const json& mod : mods["modulations"]) {
+      if (mod["source"] == "lfo_2" && mod["destination"] == "filter_1_cutoff")
+        added = mod;
+    }
+    CHECK(added.is_object());
+    if (added.is_object()) {
+      std::string amount = "modulation_" + std::to_string(added["slot"].get<int>()) + "_amount";
+      CHECK(std::abs(host.getEngine().getParameter(amount) - 0.3f) < 1e-6f);
+    }
+    CHECK(single(server, { { "type", "add_modulation" }, { "source", "nope" },
+                           { "destination", "filter_1_cutoff" } })["type"] == "error");
+    CHECK(server.handleMessage(json({ { "type", "remove_modulation" }, { "source", "lfo_2" },
+                                      { "destination", "filter_1_cutoff" } }).dump()).empty());
+    CHECK(single(server, { { "type", "get_modulations" } })["modulations"].size() == before);
+    CHECK(single(server, { { "type", "remove_modulation" }, { "source", "lfo_2" },
+                           { "destination", "filter_1_cutoff" } })["type"] == "error");
   }
 
   // Minimal WebSocket client over a raw socket.
@@ -274,6 +305,14 @@ namespace {
     CHECK(params["values"].count("macro_control_2") == 1);
     CHECK(params["values"]["macro_control_2"] == 0.75);
 
+    // A new routing from one client reaches the other.
+    a.sendText(json({ { "type", "add_modulation" }, { "source", "lfo_3" }, { "destination", "osc_2_level" } }).dump());
+    json routed = b.receiveType("modulations");
+    bool seen = false;
+    for (const json& mod : routed["modulations"])
+      seen = seen || (mod["source"] == "lfo_3" && mod["destination"] == "osc_2_level");
+    CHECK(seen);
+
     // Loading a patch sends everyone the new state.
     a.sendText(json({ { "type", "load_patch" }, { "index", 0 } }).dump());
     json loaded = b.receiveType("state");
@@ -301,6 +340,7 @@ namespace {
     };
     for (const json& name : layout["macros"])
       check(name);
+    std::vector<std::string> sources = engine.getModulationSources();
     for (const json& page : layout["pages"]) {
       json instances = page.count("instances") ? page["instances"] : json::array({ nullptr });
       for (const json& instance : instances) {
@@ -312,10 +352,19 @@ namespace {
             name.replace(at, 3, n);
           return name;
         };
-        for (const json& param : page["params"])
-          check(resolve(param));
+        if (page.count("params")) {
+          for (const json& param : page["params"])
+            check(resolve(param));
+        }
         if (page.count("switch"))
           check(resolve(page["switch"]));
+        if (page.count("source")) {
+          std::string source = resolve(page["source"]);
+          if (std::find(sources.begin(), sources.end(), source) == sources.end()) {
+            std::cerr << "  layout.json names unknown modulation source " << source << "\n";
+            ++missing;
+          }
+        }
       }
     }
     CHECK(missing == 0);

@@ -251,6 +251,8 @@ namespace sloppy {
       json stateMessage();
       json parameterInfoMessage();
       json patchesMessage();
+      json modulationInfoMessage();
+      json modulationsMessage();
 
       ControlHost& host_;
       File web_root_;
@@ -321,6 +323,7 @@ namespace sloppy {
     // server starts are still noticed.
     std::map<std::string, float> last_values;
     int last_generation = host_.getPatchGeneration();
+    int last_modulation_generation = host_.getEngine().getModulationGeneration();
     for (const std::string& name : host_.getEngine().getParameterNames())
       last_values[name] = host_.getEngine().getParameter(name);
 
@@ -336,6 +339,13 @@ namespace sloppy {
         last_values.clear();
         if (getNumClients() > 0)
           broadcast(stateMessage().dump());
+      }
+
+      int modulation_generation = host_.getEngine().getModulationGeneration();
+      if (modulation_generation != last_modulation_generation) {
+        last_modulation_generation = modulation_generation;
+        if (getNumClients() > 0)
+          broadcast(modulationsMessage().dump());
       }
 
       Engine& engine = host_.getEngine();
@@ -422,6 +432,27 @@ namespace sloppy {
     return { { "type", "patches" }, { "current", host_.getCurrentPatchIndex() }, { "patches", patches } };
   }
 
+  json ControlServer::Impl::modulationInfoMessage() {
+    Engine& engine = host_.getEngine();
+    return {
+      { "type", "mod_info" },
+      { "sources", engine.getModulationSources() },
+      { "destinations", engine.getModulationDestinations() },
+    };
+  }
+
+  json ControlServer::Impl::modulationsMessage() {
+    json modulations = json::array();
+    for (const Modulation& modulation : host_.getEngine().getModulations()) {
+      modulations.push_back({
+        { "slot", modulation.slot },
+        { "source", modulation.source },
+        { "destination", modulation.destination },
+      });
+    }
+    return { { "type", "modulations" }, { "modulations", modulations } };
+  }
+
   // Protocol, one JSON object per WebSocket text message. See docs/PROTOCOL.md.
   std::vector<std::string> ControlServer::Impl::handleMessage(const std::string& text) {
     auto error = [](const std::string& message) {
@@ -450,6 +481,28 @@ namespace sloppy {
 
       if (type == "list_patches")
         return { patchesMessage().dump() };
+
+      if (type == "get_mod_info")
+        return { modulationInfoMessage().dump() };
+
+      if (type == "get_modulations")
+        return { modulationsMessage().dump() };
+
+      // Every client, this one included, gets the new list of routings from
+      // the broadcast loop.
+      if (type == "add_modulation") {
+        std::string add_error;
+        if (!engine.addModulation(message.at("source"), message.at("destination"),
+                                  message.value("amount", 0.5f), add_error))
+          return error(add_error);
+        return {};
+      }
+
+      if (type == "remove_modulation") {
+        if (!engine.removeModulation(message.at("source"), message.at("destination")))
+          return error("No such modulation.");
+        return {};
+      }
 
       if (type == "set") {
         std::string name = message.at("name");

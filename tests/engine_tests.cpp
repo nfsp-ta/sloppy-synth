@@ -7,6 +7,7 @@
 #include "patch_library.h"
 #include "sloppy_engine.h"
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <iostream>
@@ -237,6 +238,50 @@ namespace {
     root.deleteRecursively();
   }
 
+  void testModulationMatrix() {
+    sloppy::Engine engine;
+    std::vector<std::string> sources = engine.getModulationSources();
+    std::vector<std::string> destinations = engine.getModulationDestinations();
+    auto contains = [](const std::vector<std::string>& list, const std::string& name) {
+      return std::find(list.begin(), list.end(), name) != list.end();
+    };
+    CHECK(contains(sources, "lfo_1"));
+    CHECK(contains(sources, "env_2"));
+    CHECK(contains(sources, "macro_control_1"));
+    CHECK(contains(destinations, "filter_1_cutoff"));
+    CHECK(contains(destinations, "osc_1_level"));
+    CHECK(engine.getModulations().empty());
+
+    RenderStats plain = render(engine, 60, 0.3);
+
+    // Macro 1 fully up, routed to pull oscillator 1's level all the way down.
+    int generation = engine.getModulationGeneration();
+    std::string error;
+    CHECK(engine.addModulation("macro_control_1", "osc_1_level", -1.0f, error));
+    CHECK(engine.getModulationGeneration() != generation);
+    std::vector<sloppy::Modulation> modulations = engine.getModulations();
+    CHECK(modulations.size() == 1);
+    CHECK(modulations[0].source == "macro_control_1");
+    CHECK(modulations[0].destination == "osc_1_level");
+    std::string amount = "modulation_" + std::to_string(modulations[0].slot) + "_amount";
+    CHECK(engine.getParameter(amount) == -1.0f);
+    engine.setParameter("macro_control_1", 1.0f);
+    RenderStats modulated = render(engine, 60, 0.3);
+    CHECK(modulated.rms < plain.rms * 0.5);
+
+    // Adding it again only changes the amount.
+    CHECK(engine.addModulation("macro_control_1", "osc_1_level", 0.25f, error));
+    CHECK(engine.getModulations().size() == 1);
+    CHECK(engine.getParameter(amount) == 0.25f);
+
+    CHECK(!engine.addModulation("not_a_source", "osc_1_level", 0.5f, error));
+    CHECK(!engine.addModulation("lfo_1", "not_a_parameter", 0.5f, error));
+
+    CHECK(engine.removeModulation("macro_control_1", "osc_1_level"));
+    CHECK(engine.getModulations().empty());
+    CHECK(!engine.removeModulation("macro_control_1", "osc_1_level"));
+  }
+
   void testBankImportRejectsZipSlip() {
     TemporaryFile temp_dir;
     File root = temp_dir.getFile().getChildFile("library");
@@ -265,6 +310,7 @@ int main() {
     { "setParameter changes sound", testSetParameterChangesSound },
     { "bank import", testBankImport },
     { "nested patch folders", testNestedFolders },
+    { "modulation matrix", testModulationMatrix },
     { "bank import rejects zip slip", testBankImportRejectsZipSlip },
   };
 

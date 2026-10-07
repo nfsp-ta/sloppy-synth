@@ -12,6 +12,8 @@ const state = {
   patch: { index: -1, name: "", author: "", style: "" },
   macroNames: [],
   patches: [],
+  modInfo: { sources: [], destinations: [] },
+  modulations: [],     // { slot, source, destination }
   layout: null,
   view: "play",
   page: null,
@@ -57,6 +59,8 @@ function connect() {
     send({ type: "get_param_info" });
     send({ type: "hello" });
     send({ type: "list_patches" });
+    send({ type: "get_mod_info" });
+    send({ type: "get_modulations" });
   });
 
   socket.addEventListener("message", (event) => {
@@ -126,6 +130,14 @@ function handleMessage(message) {
       patchTree = null;
       if (message.current >= 0) state.patch.index = message.current;
       renderPatchList();
+      break;
+    case "mod_info":
+      state.modInfo = { sources: message.sources, destinations: message.destinations };
+      if (state.view === "edit") renderEditPage({ keepScroll: true });
+      break;
+    case "modulations":
+      state.modulations = message.modulations;
+      if (state.view === "edit") renderEditPage({ keepScroll: true });
       break;
     case "error":
       toast(message.message);
@@ -691,8 +703,10 @@ function updateChipDots() {
   }
 }
 
-function renderEditPage() {
+function renderEditPage({ keepScroll = false } = {}) {
+  if (!state.layout || !Object.keys(state.info).length) return;
   if (!state.page || !state.layout.pages.some((p) => p.id === state.page)) state.page = state.layout.pages[0].id;
+  const scrollTop = keepScroll ? $("controls").scrollTop : 0;
   renderPageChips();
   const page = state.layout.pages.find((p) => p.id === state.page);
   const instances = pageInstances(page);
@@ -743,6 +757,12 @@ function renderEditPage() {
     controls.classList.remove("disabled");
   }
 
+  if (page.kind === "modulation") {
+    renderModulationPage(controls);
+    controls.scrollTop = scrollTop;
+    return;
+  }
+
   // Controls
   const prefixes = [];
   const sample = resolve(page.params[0], instance);
@@ -752,14 +772,16 @@ function renderEditPage() {
   prefixes.push(page.title);
 
   controls.replaceChildren();
+  if (page.source) controls.append(makeRoutesCard(resolve(page.source, instance)));
   for (const template of page.params) {
     const name = resolve(template, instance);
     if (!state.info[name]) continue;
     controls.append(makeControl(name, shortLabel(name, prefixes)));
   }
+  controls.scrollTop = scrollTop;
 }
 
-function makeControl(name, label) {
+function makeControl(name, label, format = null) {
   const info = state.info[name];
   const el = document.createElement("div");
   el.className = "control";
@@ -772,6 +794,13 @@ function makeControl(name, label) {
   valueEl.className = "control-value";
   head.append(labelEl, valueEl);
   el.append(head);
+  const modulatedBy = state.modulations.filter((m) => m.destination === name);
+  if (modulatedBy.length) {
+    const badge = document.createElement("div");
+    badge.className = "mod-badge";
+    badge.textContent = "Modulated by " + modulatedBy.map((m) => sourceLabel(m.source)).join(", ");
+    el.append(badge);
+  }
 
   let update;
   if (info.options && info.options.length <= 4) {
@@ -821,9 +850,13 @@ function makeControl(name, label) {
     el.append(slider);
     update = (value) => {
       if (!state.dragging.has(name) || document.activeElement !== slider) slider.value = value;
-      const t = (value - info.min) / (info.max - info.min || 1);
-      slider.style.setProperty("--fill", `${(t * 100).toFixed(1)}%`);
-      valueEl.textContent = displayValue(name, value);
+      // Ranges that cross zero (like modulation amounts) fill from the middle.
+      const span = info.max - info.min || 1;
+      const t = (value - info.min) / span;
+      const zero = info.min < 0 && info.max > 0 ? -info.min / span : 0;
+      slider.style.setProperty("--from", `${(Math.min(t, zero) * 100).toFixed(1)}%`);
+      slider.style.setProperty("--fill", `${(Math.max(t, zero) * 100).toFixed(1)}%`);
+      valueEl.textContent = format ? format(value) : displayValue(name, value);
     };
   }
 
@@ -831,6 +864,213 @@ function makeControl(name, label) {
   onParam(name, update);
   update(state.values[name] ?? info.default);
   return el;
+}
+
+// ---- Modulation ------------------------------------------------------------
+
+const SOURCE_LABELS = {
+  aftertouch: "Aftertouch", lift: "Lift (release velocity)", mod_wheel: "Mod Wheel", note: "Note (pitch)",
+  note_in_octave: "Note in Octave", pitch_wheel: "Pitch Wheel", random: "Note Random", slide: "Slide",
+  stereo: "Stereo", velocity: "Velocity",
+};
+
+function sourceLabel(source) {
+  let match = source.match(/^macro_control_(\d)$/);
+  if (match) return state.macroNames[match[1] - 1] || `Macro ${match[1]}`;
+  match = source.match(/^(env|lfo|random)_(\d)$/);
+  if (match) return `${{ env: "Envelope", lfo: "LFO", random: "Random" }[match[1]]} ${match[2]}`;
+  return SOURCE_LABELS[source] || source;
+}
+
+function sourceGroup(source) {
+  if (/^env_/.test(source)) return "Envelopes";
+  if (/^lfo_/.test(source)) return "LFOs";
+  if (/^random_/.test(source)) return "Random LFOs";
+  if (/^macro_/.test(source)) return "Macros";
+  return "Performance";
+}
+
+// Destination groups follow the edit pages: "Oscillator 1", "Filter FX", ...
+function destinationGroup(name) {
+  const label = labelFor(name);
+  const match = label.match(/^(Oscillator \d|Filter \w+|Envelope \d|LFO \d|Random LFO \d|Random \d|Sample|Chorus|Delay|Reverb|Distortion|Phaser|Flanger|Compressor|EQ|Macro)/);
+  return match ? match[1] : "Voice and global";
+}
+
+function percent(value) {
+  return `${Math.round(value * 100)}%`;
+}
+
+// Makes a <select> with <optgroup>s from [{ value, label, group }].
+function groupedSelect(items, placeholder) {
+  const select = document.createElement("select");
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = placeholder;
+  select.append(empty);
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.group)) {
+      const group = document.createElement("optgroup");
+      group.label = item.group;
+      groups.set(item.group, group);
+      select.append(group);
+    }
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.textContent = item.label;
+    groups.get(item.group).append(option);
+  }
+  return select;
+}
+
+function sourceItems() {
+  const order = ["Envelopes", "LFOs", "Random LFOs", "Macros", "Performance"];
+  return state.modInfo.sources
+    .map((name) => ({ value: name, label: sourceLabel(name), group: sourceGroup(name) }))
+    .sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || a.label.localeCompare(b.label, undefined, { numeric: true }));
+}
+
+function destinationItems() {
+  return state.modInfo.destinations
+    .filter((name) => !name.startsWith("modulation_") && state.info[name])
+    .map((name) => ({ value: name, label: labelFor(name), group: destinationGroup(name) }))
+    .sort((a, b) => a.group.localeCompare(b.group, undefined, { numeric: true }) ||
+                    a.label.localeCompare(b.label, undefined, { numeric: true }));
+}
+
+function addModulation(source, destination) {
+  if (!source || !destination) return;
+  if (state.modulations.some((m) => m.source === source && m.destination === destination)) {
+    toast(`${sourceLabel(source)} already modulates ${labelFor(destination)}.`);
+    return;
+  }
+  send({ type: "add_modulation", source, destination, amount: 0.5 });
+}
+
+// One routing: what it connects, its depth, its options and a remove button.
+// `show` picks which end to name: "both", or "destination" on a source's page.
+function makeRouting(modulation, show = "both") {
+  const card = document.createElement("div");
+  card.className = "routing";
+  const head = document.createElement("div");
+  head.className = "routing-head";
+  const title = document.createElement("span");
+  title.className = "routing-title";
+  title.textContent = show === "destination"
+    ? labelFor(modulation.destination)
+    : `${sourceLabel(modulation.source)} \u2192 ${labelFor(modulation.destination)}`;
+  const remove = document.createElement("button");
+  remove.className = "icon-button small";
+  remove.setAttribute("aria-label", `Remove ${title.textContent}`);
+  remove.textContent = "\u00d7";
+  remove.addEventListener("click", () =>
+    send({ type: "remove_modulation", source: modulation.source, destination: modulation.destination }));
+  head.append(title, remove);
+  card.append(head);
+
+  const prefix = `modulation_${modulation.slot}_`;
+  if (state.info[prefix + "amount"]) {
+    const amount = makeControl(prefix + "amount", "Amount", percent);
+    amount.classList.add("bare");
+    card.append(amount);
+  }
+  const toggles = document.createElement("div");
+  toggles.className = "segmented toggles";
+  for (const [option, label] of [["bipolar", "Bipolar"], ["stereo", "Stereo"], ["bypass", "Bypass"]]) {
+    const name = prefix + option;
+    if (!state.info[name]) continue;
+    const button = document.createElement("button");
+    button.textContent = label;
+    button.addEventListener("click", () => setParam(name, (state.values[name] ?? 0) >= 0.5 ? 0 : 1));
+    const update = (value) => button.setAttribute("aria-pressed", String((value ?? 0) >= 0.5));
+    update.owner = "page";
+    onParam(name, update);
+    update(state.values[name]);
+    toggles.append(button);
+  }
+  card.append(toggles);
+  return card;
+}
+
+// On an envelope, LFO or random page: where this source is routed.
+function makeRoutesCard(source) {
+  const card = document.createElement("div");
+  card.className = "control routes";
+  const head = document.createElement("div");
+  head.className = "control-head";
+  const label = document.createElement("span");
+  label.className = "control-label";
+  label.textContent = "Modulates";
+  head.append(label);
+  card.append(head);
+
+  const routes = state.modulations.filter((m) => m.source === source);
+  if (!routes.length) {
+    const note = document.createElement("p");
+    note.className = "routes-empty";
+    note.textContent = `${sourceLabel(source)} isn't routed anywhere yet, so it has no effect on the sound.`;
+    card.append(note);
+  }
+  for (const modulation of routes) card.append(makeRouting(modulation, "destination"));
+
+  const add = document.createElement("div");
+  add.className = "routes-add";
+  const destination = groupedSelect(destinationItems(), "Add a destination\u2026");
+  destination.setAttribute("aria-label", `Route ${sourceLabel(source)} to`);
+  destination.addEventListener("change", () => addModulation(source, destination.value));
+  add.append(destination);
+  card.append(add);
+  return card;
+}
+
+// The Mod page: every routing, and a form to add one.
+function renderModulationPage(container) {
+  container.replaceChildren();
+
+  const form = document.createElement("div");
+  form.className = "control routes";
+  const head = document.createElement("div");
+  head.className = "control-head";
+  const label = document.createElement("span");
+  label.className = "control-label";
+  label.textContent = "Add a routing";
+  head.append(label);
+  const source = groupedSelect(sourceItems(), "Source\u2026");
+  source.setAttribute("aria-label", "Modulation source");
+  const destination = groupedSelect(destinationItems(), "Destination\u2026");
+  destination.setAttribute("aria-label", "Modulation destination");
+  const add = document.createElement("button");
+  add.className = "pill";
+  add.textContent = "Add";
+  add.addEventListener("click", () => {
+    if (!source.value || !destination.value) {
+      toast("Pick a source and a destination.");
+      return;
+    }
+    addModulation(source.value, destination.value);
+  });
+  const row = document.createElement("div");
+  row.className = "routes-add";
+  row.append(source, destination, add);
+  form.append(head, row);
+  container.append(form);
+
+  const count = document.createElement("p");
+  count.className = "routes-count";
+  count.textContent = state.modulations.length
+    ? `${state.modulations.length} of 64 routings in use`
+    : "This patch has no modulation routings.";
+  container.append(count);
+
+  const sorted = [...state.modulations].sort((a, b) =>
+    sourceLabel(a.source).localeCompare(sourceLabel(b.source), undefined, { numeric: true }) ||
+    labelFor(a.destination).localeCompare(labelFor(b.destination), undefined, { numeric: true }));
+  for (const modulation of sorted) {
+    const card = makeRouting(modulation);
+    card.classList.add("control");
+    container.append(card);
+  }
 }
 
 // ---- Misc ----------------------------------------------------------------

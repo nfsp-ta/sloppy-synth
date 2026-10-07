@@ -178,7 +178,9 @@ Next:
    a systemd service so the Pi boots straight into the synth.
 3. Control protocol and server in `sloppy-synth`. *(done, docs/PROTOCOL.md)*
 4. First web UI: patch browser, macros, a performance page, parameter
-   pages. *(first version done)* Next: modulation matrix, envelope and LFO
+   pages. *(first version done)* Modulation routing: a Mod page with every
+   routing, and a "Modulates" list on each envelope, LFO and random page.
+   *(done)* Next: envelope and LFO
    shape views, oscilloscope, bank upload from the browser, themes
    (built-in and user-made).
 5. Encoder/small-screen UI on the Pi.
