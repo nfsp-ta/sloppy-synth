@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same neutral blue-gray as web/style.css. -->
+<resources>
+    <color name="background">#14161b</color>
+    <color name="accent">#aab4c6</color>
+</resources>

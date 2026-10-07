@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">sloppy-synth</string>
+    <string name="starting">Starting the synth…</string>
+    <string name="start_failed">The synth couldn\'t start.</string>
+    <string name="channel_name">Playing</string>
+    <string name="notification_title">sloppy-synth is playing</string>
+    <string name="notification_text">Listening for MIDI. Tap to open.</string>
+    <string name="stop">Stop</string>
+</resources>

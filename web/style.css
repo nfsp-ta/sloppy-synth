@@ -258,6 +258,14 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+.patch-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 12px;
+}
+.patch-tools .search { flex: 1; min-width: 0; margin: 0; }
+.patch-tools .pill { min-height: var(--tap); }
 .patch-list {
   flex: 1;
   overflow-x: hidden;
@@ -588,7 +596,7 @@ select {
   .knob svg { width: min(16vw, 130px); }
   .controls { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .patch-list > * { max-width: 760px; margin-left: auto; margin-right: auto; }
-  .view[data-view="patches"] .search { width: min(760px, calc(100% - 24px)); align-self: center; }
+  .view[data-view="patches"] .patch-tools { width: min(760px, calc(100% - 24px)); align-self: center; }
   .toast { bottom: 24px; }
 }
 

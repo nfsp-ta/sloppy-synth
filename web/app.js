@@ -1159,6 +1159,20 @@ function toast(text) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 3500);
 }
 
+// Inside the Android app, the page can ask the app to import patches and
+// banks through a file picker. The app reports back through sloppyImported.
+function setupAndroid() {
+  const android = window.SloppyAndroid;
+  if (!android) return;
+  const button = $("import-patches");
+  button.hidden = false;
+  button.addEventListener("click", () => android.importFile());
+  window.sloppyImported = (message, ok) => {
+    toast(message);
+    if (ok) send({ type: "list_patches" });
+  };
+}
+
 async function main() {
   for (const tab of document.querySelectorAll(".tabs button")) {
     tab.addEventListener("click", () => showView(tab.dataset.view));
@@ -1167,6 +1181,7 @@ async function main() {
   $("prev-patch").addEventListener("click", () => stepPatch(-1));
   $("next-patch").addEventListener("click", () => stepPatch(1));
   $("patch-search").addEventListener("input", renderPatchList);
+  setupAndroid();
 
   try {
     state.page = localStorage.getItem("sloppy.page");

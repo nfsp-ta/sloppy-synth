@@ -27,3 +27,9 @@ target_compile_definitions(control_tests PRIVATE
 add_test(NAME control_tests COMMAND control_tests)
 # A hung socket test should fail in minutes, not at ctest's 25-minute default.
 set_tests_properties(control_tests PROPERTIES TIMEOUT 300)
+
+# The Android app's MIDI parser is plain C++, so it's tested here too.
+set(ANDROID_CPP_DIR ${PROJECT_SOURCE_DIR}/android/app/src/main/cpp)
+add_executable(midi_parser_tests midi_parser_tests.cpp ${ANDROID_CPP_DIR}/midi_parser.cpp)
+target_include_directories(midi_parser_tests PRIVATE ${ANDROID_CPP_DIR})
+add_test(NAME midi_parser_tests COMMAND midi_parser_tests)

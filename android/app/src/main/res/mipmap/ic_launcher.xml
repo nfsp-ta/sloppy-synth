@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icon for Android 7.1 and older, which have no adaptive icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <path
+        android:pathData="M14,0 L50,0 Q64,0 64,14 L64,50 Q64,64 50,64 L14,64 Q0,64 0,50 L0,14 Q0,0 14,0 Z"
+        android:fillColor="@color/background" />
+    <path
+        android:pathData="M8,40 C16,40 18,18 26,18 S34,46 42,46 S50,28 56,28"
+        android:strokeColor="@color/accent"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>

@@ -93,6 +93,9 @@ fallback target.
 
 ## 4. Android
 
+Built this way in `android/` (see the README). The notes below were the
+plan.
+
 Recommended approach: a small Kotlin app with the engine as an NDK library.
 
 - Audio via Oboe (low-latency AAudio on Android 8.1+, OpenSL ES below),
@@ -184,7 +187,10 @@ Next:
    shape views, oscilloscope, bank upload from the browser, themes
    (built-in and user-made).
 5. Encoder/small-screen UI on the Pi.
-6. Android app: NDK engine, Oboe, MIDI, WebView UI.
+6. Android app: NDK engine, Oboe, MIDI, WebView UI. *(first version in
+   `android/`)* Next: measure on real old phones; per-device voice limits;
+   Bluetooth MIDI pairing; an option to let other devices on the network
+   edit the phone's synth; a release signing key.
 7. Performance work: multi-core voices, NEON tuning.
 
 ## 8. Rules from upstream
