@@ -28,9 +28,15 @@ await page({ width: 390, height: 844 }, 'phone', async (p) => {
   console.log('key down class:', await key.getAttribute('class'));
   await p.mouse.up();
   await p.click('.tabs button[data-view="patches"]');
-  await p.waitForSelector('.patch-item');
+  await p.waitForSelector('.patch-folder');
+  // The library has one bank, so it opens straight into its folders.
+  console.log('folders:', (await p.locator('.patch-folder .name').allTextContents()).join(', '));
+  await p.locator('.patch-folder', { hasText: 'Pads' }).click();
   console.log('patches:', await p.locator('.patch-item').allTextContents());
   await p.screenshot({ path: `${out}/phone-patches.png` });
+  await p.fill('#patch-search', 'bass');
+  console.log('search "bass":', (await p.locator('.patch-item').allTextContents()).join(' | '));
+  await p.fill('#patch-search', '');
   await p.locator('.patch-item', { hasText: 'Test Pad' }).click();
   await p.waitForFunction(() => document.getElementById('patch-name').textContent === 'Test Pad');
   console.log('loaded:', await p.textContent('#patch-name'), '|', await p.textContent('#patch-meta'));

@@ -26,6 +26,9 @@ namespace sloppy {
     std::string name;      // file name without extension
     std::string bank;      // top level folder in the library, e.g. "Factory"
     std::string category;  // folder below Presets/, if any
+    // Folders between the bank and the file, without Vital's "Presets"
+    // folder: Bank/Presets/Leads/Bright/x.vital gives { "Leads", "Bright" }.
+    std::vector<std::string> folders;
   };
 
   class PatchLibrary {

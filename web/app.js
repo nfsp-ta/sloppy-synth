@@ -110,7 +110,8 @@ function handleMessage(message) {
       state.macroNames = message.macros || [];
       updatePatchHeader();
       render();
-      highlightCurrentPatch();
+      if (state.view === "patches") revealCurrentPatch();
+      highlightCurrentPatch(state.view === "patches");
       break;
     case "params":
       for (const [name, value] of Object.entries(message.values)) {
@@ -122,6 +123,7 @@ function handleMessage(message) {
       break;
     case "patches":
       state.patches = message.patches;
+      patchTree = null;
       if (message.current >= 0) state.patch.index = message.current;
       renderPatchList();
       break;
@@ -195,7 +197,10 @@ function showView(view) {
   for (const section of document.querySelectorAll(".view")) {
     section.hidden = section.dataset.view !== view;
   }
-  if (view === "patches") highlightCurrentPatch(true);
+  if (view === "patches") {
+    revealCurrentPatch();
+    highlightCurrentPatch(true);
+  }
   try { localStorage.setItem("sloppy.view", view); } catch {}
 }
 
@@ -445,44 +450,174 @@ function setupKeyboard() {
 
 // ---- Patches -------------------------------------------------------------
 
+// The library is shown as a tree: bank, then folders, then patches. Only open
+// folders are rendered, so big libraries stay quick. Searching switches to a
+// flat list of matches with their folder path.
+
+const SEP = "\u0000";
+const MAX_SEARCH_RESULTS = 300;
+let patchTree = null;
+let openFolders = loadOpenFolders();
+
+function loadOpenFolders() {
+  try { return new Set(JSON.parse(localStorage.getItem("sloppy.openFolders")) || []); }
+  catch { return new Set(); }
+}
+
+function saveOpenFolders() {
+  try { localStorage.setItem("sloppy.openFolders", JSON.stringify([...openFolders])); } catch {}
+}
+
+function patchPath(patch) {
+  return [patch.bank || "Patches", ...(patch.folders || [])];
+}
+
+function buildPatchTree() {
+  const root = { name: "", key: "", folders: new Map(), patches: [], count: 0 };
+  for (const patch of state.patches) {
+    let node = root;
+    node.count++;
+    for (const name of patchPath(patch)) {
+      if (!node.folders.has(name)) {
+        const key = node.key ? node.key + SEP + name : name;
+        node.folders.set(name, { name, key, folders: new Map(), patches: [], count: 0 });
+      }
+      node = node.folders.get(name);
+      node.count++;
+    }
+    node.patches.push(patch);
+  }
+  return root;
+}
+
 function renderPatchList() {
   const list = $("patch-list");
   const query = $("patch-search").value.trim().toLowerCase();
   list.replaceChildren();
 
-  const matches = state.patches.filter((p) =>
-    !query || `${p.name} ${p.bank} ${p.category}`.toLowerCase().includes(query));
-  if (!matches.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = state.patches.length
-      ? "No patches match."
-      : "No patches in the library yet. Import a bank with sloppy-synth --import-bank.";
-    list.append(empty);
+  if (!state.patches.length) {
+    list.append(emptyNote("No patches in the library yet. Import a bank with sloppy-synth --import-bank."));
     return;
   }
-
-  let group = null;
-  let groupKey = null;
-  for (const patch of matches) {
-    const key = [patch.bank, patch.category].filter(Boolean).join(" / ") || "Patches";
-    if (key !== groupKey) {
-      groupKey = key;
-      group = document.createElement("div");
-      group.className = "patch-group";
-      const heading = document.createElement("h3");
-      heading.textContent = key;
-      group.append(heading);
-      list.append(group);
-    }
-    const item = document.createElement("button");
-    item.className = "patch-item";
-    item.dataset.index = patch.index;
-    item.textContent = patch.name;
-    item.addEventListener("click", () => loadPatch(patch.index));
-    group.append(item);
+  if (query) {
+    renderSearchResults(list, query);
+  }
+  else {
+    patchTree = patchTree || buildPatchTree();
+    const tree = document.createElement("div");
+    tree.className = "patch-tree";
+    tree.setAttribute("role", "tree");
+    // A library with a single bank opens straight into it.
+    const top = [...patchTree.folders.values()];
+    if (top.length === 1) openFolders.add(top[0].key);
+    renderFolderChildren(tree, patchTree, 0);
+    list.append(tree);
   }
   highlightCurrentPatch();
+}
+
+function renderFolderChildren(container, node, depth) {
+  for (const folder of node.folders.values()) {
+    const open = openFolders.has(folder.key);
+    const row = document.createElement("button");
+    row.className = "patch-folder";
+    row.style.setProperty("--depth", depth);
+    row.setAttribute("role", "treeitem");
+    row.setAttribute("aria-expanded", String(open));
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = folder.name;
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = folder.count;
+    row.append(name, count);
+    row.addEventListener("click", () => toggleFolder(folder, row, depth));
+    container.append(row);
+
+    const children = document.createElement("div");
+    children.className = "patch-children";
+    children.setAttribute("role", "group");
+    if (open) renderFolderChildren(children, folder, depth + 1);
+    container.append(children);
+  }
+  for (const patch of node.patches) container.append(patchRow(patch, depth));
+}
+
+function toggleFolder(folder, row, depth) {
+  const children = row.nextElementSibling;
+  if (openFolders.has(folder.key)) {
+    openFolders.delete(folder.key);
+    children.replaceChildren();
+  }
+  else {
+    openFolders.add(folder.key);
+    renderFolderChildren(children, folder, depth + 1);
+    highlightCurrentPatch();
+  }
+  row.setAttribute("aria-expanded", String(openFolders.has(folder.key)));
+  saveOpenFolders();
+}
+
+function patchRow(patch, depth, showPath = false) {
+  const item = document.createElement("button");
+  item.className = "patch-item";
+  item.style.setProperty("--depth", depth);
+  item.setAttribute("role", "treeitem");
+  item.dataset.index = patch.index;
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = patch.name;
+  item.append(name);
+  if (showPath) {
+    const path = document.createElement("span");
+    path.className = "path";
+    path.textContent = patchPath(patch).join(" / ");
+    item.append(path);
+  }
+  item.addEventListener("click", () => loadPatch(patch.index));
+  return item;
+}
+
+function renderSearchResults(list, query) {
+  const words = query.split(/\s+/);
+  const matches = state.patches.filter((p) => {
+    const text = `${p.name} ${patchPath(p).join(" ")}`.toLowerCase();
+    return words.every((word) => text.includes(word));
+  });
+  if (!matches.length) {
+    list.append(emptyNote("No patches match."));
+    return;
+  }
+  for (const patch of matches.slice(0, MAX_SEARCH_RESULTS)) list.append(patchRow(patch, 0, true));
+  if (matches.length > MAX_SEARCH_RESULTS) {
+    list.append(emptyNote(`Showing ${MAX_SEARCH_RESULTS} of ${matches.length} matches. Type more to narrow it down.`));
+  }
+}
+
+function emptyNote(text) {
+  const note = document.createElement("div");
+  note.className = "empty";
+  note.textContent = text;
+  return note;
+}
+
+// Opens the folders down to the current patch, so it can be seen.
+function revealCurrentPatch() {
+  const patch = state.patches[state.patch.index];
+  if (!patch || $("patch-search").value.trim()) return;
+  let key = "";
+  let changed = false;
+  for (const name of patchPath(patch)) {
+    key = key ? key + SEP + name : name;
+    if (!openFolders.has(key)) {
+      openFolders.add(key);
+      changed = true;
+    }
+  }
+  if (changed) {
+    saveOpenFolders();
+    renderPatchList();
+  }
 }
 
 function highlightCurrentPatch(scroll = false) {

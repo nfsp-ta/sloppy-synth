@@ -416,6 +416,7 @@ namespace sloppy {
         { "name", patch.name },
         { "bank", patch.bank },
         { "category", patch.category },
+        { "folders", patch.folders },
       });
     }
     return { { "type", "patches" }, { "current", host_.getCurrentPatchIndex() }, { "patches", patches } };

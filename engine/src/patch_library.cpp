@@ -132,6 +132,10 @@ namespace sloppy {
       int presets_index = parts.indexOf(LoadSave::kPresetFolderName);
       if (presets_index >= 0 && presets_index + 1 < parts.size())
         patch.category = parts[presets_index + 1].toStdString();
+      for (int i = 1; i < parts.size(); ++i) {
+        if (i != presets_index)
+          patch.folders.push_back(parts[i].toStdString());
+      }
 
       patches.push_back(patch);
     }
@@ -146,8 +150,8 @@ namespace sloppy {
     std::sort(patches.begin(), patches.end(), [](const PatchEntry& a, const PatchEntry& b) {
       if (a.bank != b.bank)
         return a.bank < b.bank;
-      if (a.category != b.category)
-        return a.category < b.category;
+      if (a.folders != b.folders)
+        return a.folders < b.folders;
       return a.name < b.name;
     });
     return patches;

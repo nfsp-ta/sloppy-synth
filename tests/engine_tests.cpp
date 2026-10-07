@@ -210,6 +210,33 @@ namespace {
     root.deleteRecursively();
   }
 
+  void testNestedFolders() {
+    TemporaryFile temp_dir;
+    File root = temp_dir.getFile();
+    File nested = root.getChildFile("My Bank/Presets/Leads/Bright/lead.vital");
+    File loose = root.getChildFile("Loose/one.vital");
+    CHECK(nested.getParentDirectory().createDirectory());
+    CHECK(loose.getParentDirectory().createDirectory());
+    CHECK(fixture("test_bass.vital").copyFileTo(nested));
+    CHECK(fixture("test_bass.vital").copyFileTo(loose));
+
+    sloppy::PatchLibrary library(root);
+    std::vector<sloppy::PatchEntry> patches = library.listPatches();
+    CHECK(patches.size() == 2);
+    for (const sloppy::PatchEntry& patch : patches) {
+      if (patch.name == "lead") {
+        CHECK(patch.bank == "My Bank");
+        CHECK(patch.category == "Leads");
+        CHECK((patch.folders == std::vector<std::string> { "Leads", "Bright" }));
+      }
+      else {
+        CHECK(patch.bank == "Loose");
+        CHECK(patch.folders.empty());
+      }
+    }
+    root.deleteRecursively();
+  }
+
   void testBankImportRejectsZipSlip() {
     TemporaryFile temp_dir;
     File root = temp_dir.getFile().getChildFile("library");
@@ -237,6 +264,7 @@ int main() {
     { "MIDI from another thread plays", testMidiFromAnotherThreadPlays },
     { "setParameter changes sound", testSetParameterChangesSound },
     { "bank import", testBankImport },
+    { "nested patch folders", testNestedFolders },
     { "bank import rejects zip slip", testBankImportRejectsZipSlip },
   };
 

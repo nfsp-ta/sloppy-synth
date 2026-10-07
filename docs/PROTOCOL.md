@@ -34,7 +34,9 @@ parameter's `min`..`max` range.
   `displayValue` in `web/app.js`), and `options` for parameters with named
   values.
 - `patches`: `current` and `patches`, a list of `index`, `name`, `bank`,
-  `category`.
+  `category` and `folders` (the folder path between the bank and the file,
+  without Vital's `Presets` folder; UIs build their patch tree from `bank`
+  plus `folders`).
 - `error`: `message`.
 
 ## Security
