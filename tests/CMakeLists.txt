@@ -25,3 +25,5 @@ target_compile_definitions(control_tests PRIVATE
   SLOPPY_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
   SLOPPY_WEB_DIR="${PROJECT_SOURCE_DIR}/web")
 add_test(NAME control_tests COMMAND control_tests)
+# A hung socket test should fail in minutes, not at ctest's 25-minute default.
+set_tests_properties(control_tests PROPERTIES TIMEOUT 300)
