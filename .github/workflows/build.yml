@@ -54,6 +54,20 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      # Temporary: details for the armhf-only control_tests crash.
+      - name: Diagnose control_tests crash
+        if: failure() && matrix.arch == 'armhf'
+        working-directory: build/tests
+        run: |
+          set +e
+          ulimit -a; nproc; uname -a
+          Q="qemu-arm-static -L /usr/arm-linux-gnueabihf"
+          echo "== without the glibc stack cache"
+          GLIBC_TUNABLES=glibc.pthread.stack_cache_size=0 $Q ./control_tests 2>&1 | tail -5
+          echo "== strace"
+          $Q -strace ./control_tests > strace.txt 2>&1
+          grep -nE "clone|exit|mmap2?\(|munmap|mprotect|SIGSEGV|rseq|set_robust|futex\(.*WAKE" strace.txt | tail -120
+
       - name: Package
         run: |
           mkdir -p dist/sloppy-synth-${{ matrix.name }}
