@@ -22,7 +22,11 @@
 #if HEADLESS
 
 class FullInterface { };
+// sloppy-synth: headless builds may still use juce_audio_devices (for the
+// real-time player), which has its own AudioDeviceManager.
+#if !defined(JUCE_AUDIO_DEVICES_H_INCLUDED)
 class AudioDeviceManager { };
+#endif
 
 #endif
 
