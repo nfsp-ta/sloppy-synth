@@ -16,6 +16,7 @@ plan for Android and for small-screen, rotary-encoder and web UIs.
 | `vital/` | Upstream Vital source (mtytel/vital `636ca0e`), kept close to upstream. Patches to it are marked `sloppy-synth:` |
 | `engine/` | The headless engine: `sloppy::Engine` (play, load patches, parameters) and `sloppy::PatchLibrary` (banks). JUCE config with no GUI modules |
 | `apps/sloppy-synth` | Real-time player: loads a patch, plays it from MIDI through ALSA |
+| `web/` | The web UI for phones, tablets and desktops, served by `sloppy-synth` |
 | `apps/sloppy-render` | Offline renderer: patch + notes in, WAV out. Also a quick benchmark |
 | `tests/` | Engine tests and generated test patches |
 | `cmake/toolchains/` | Cross-compile setups for 64-bit and 32-bit Raspberry Pi OS |
@@ -73,6 +74,12 @@ ready-to-run binaries for x86_64, aarch64 and armhf.
 # Render to a WAV, and see how much faster than real time the engine runs
 ./sloppy-render "My Patch.vital" -n C3,E3,G3,B3 -l 4 -o out.wav
 ```
+
+`sloppy-synth` also serves the web UI, on port 8080 by default, and prints
+its address at startup. Open it on a phone or tablet on the same network to
+play, browse patches and edit sounds; several devices can be connected at
+once and stay in sync. `--http-bind 127.0.0.1` keeps it local and `--no-web`
+turns it off. The protocol is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 MIDI program changes switch between library patches (bank select MSB picks
 the next group of 128). The library lives in `~/.local/share/sloppy-synth`

@@ -25,6 +25,16 @@ namespace sloppy {
     float max = 1.0f;
     float default_value = 0.0f;
     float value = 0.0f;
+
+    // How Vital displays the value: scale it (see vital::ValueDetails),
+    // add post_offset, invert if asked, multiply, then append units.
+    int value_scale = 1;  // vital::ValueDetails::ValueScale
+    float post_offset = 0.0f;
+    float display_multiply = 1.0f;
+    bool display_invert = false;
+    std::string units;
+    // Names for indexed values (filter models, waveforms...), if any.
+    std::vector<std::string> options;
   };
 
   class Engine : public HeadlessSynth {

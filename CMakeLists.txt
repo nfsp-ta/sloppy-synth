@@ -73,9 +73,10 @@ find_package(Threads REQUIRED)
 # ---------------------------------------------------------------------------
 add_library(sloppy_engine STATIC
   ${VITAL_DIR}/src/unity_build/synthesis.cpp
-  ${VITAL_DIR}/src/unity_build/common.cpp
+  engine/src/common_unity.cpp  # includes vital/src/unity_build/common.cpp
   engine/src/sloppy_engine.cpp
   engine/src/patch_library.cpp
+  engine/src/control_server.cpp
   ${JUCE_MODULE_SOURCES}
 )
 
@@ -157,6 +158,9 @@ target_link_libraries(sloppy-render PRIVATE sloppy_engine)
 if(SLOPPY_WITH_AUDIO_DEVICES)
   add_executable(sloppy-synth apps/sloppy-synth/main.cpp)
   target_link_libraries(sloppy-synth PRIVATE sloppy_engine)
+  # The web UI is served from a "web" folder next to the program.
+  add_custom_command(TARGET sloppy-synth POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web $<TARGET_FILE_DIR:sloppy-synth>/web)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -170,4 +174,5 @@ endif()
 install(TARGETS sloppy-render RUNTIME DESTINATION bin)
 if(SLOPPY_WITH_AUDIO_DEVICES)
   install(TARGETS sloppy-synth RUNTIME DESTINATION bin)
+  install(DIRECTORY web/ DESTINATION share/sloppy-synth/web)
 endif()

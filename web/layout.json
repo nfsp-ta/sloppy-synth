@@ -1,0 +1,94 @@
+{
+  "comment": "Which parameters each edit page shows, in order. {n} is replaced by the instance number. Shared by every sloppy-synth UI (web, and later the encoder UI), so keep pages short enough to page through with a few knobs.",
+  "macros": ["macro_control_1", "macro_control_2", "macro_control_3", "macro_control_4"],
+  "pages": [
+    {
+      "id": "osc", "title": "Osc", "instances": [1, 2, 3], "switch": "osc_{n}_on",
+      "params": ["osc_{n}_level", "osc_{n}_pan", "osc_{n}_transpose", "osc_{n}_tune", "osc_{n}_wave_frame",
+                 "osc_{n}_unison_voices", "osc_{n}_unison_detune", "osc_{n}_unison_blend", "osc_{n}_stereo_spread",
+                 "osc_{n}_spectral_morph_type", "osc_{n}_spectral_morph_amount",
+                 "osc_{n}_distortion_type", "osc_{n}_distortion_amount",
+                 "osc_{n}_stack_style", "osc_{n}_phase", "osc_{n}_random_phase", "osc_{n}_destination"]
+    },
+    {
+      "id": "sample", "title": "Sample", "switch": "sample_on",
+      "params": ["sample_level", "sample_pan", "sample_transpose", "sample_tune", "sample_keytrack",
+                 "sample_loop", "sample_bounce", "sample_random_phase", "sample_destination"]
+    },
+    {
+      "id": "filter", "title": "Filter", "instances": [1, 2, "fx"], "instanceLabels": ["1", "2", "FX"],
+      "switch": "filter_{n}_on",
+      "params": ["filter_{n}_model", "filter_{n}_style", "filter_{n}_cutoff", "filter_{n}_resonance",
+                 "filter_{n}_drive", "filter_{n}_blend", "filter_{n}_keytrack", "filter_{n}_mix",
+                 "filter_{n}_formant_x", "filter_{n}_formant_y", "filter_{n}_formant_transpose"]
+    },
+    {
+      "id": "env", "title": "Env", "instances": [1, 2, 3, 4, 5, 6],
+      "params": ["env_{n}_attack", "env_{n}_decay", "env_{n}_sustain", "env_{n}_release",
+                 "env_{n}_delay", "env_{n}_hold", "env_{n}_attack_power", "env_{n}_decay_power",
+                 "env_{n}_release_power"]
+    },
+    {
+      "id": "lfo", "title": "LFO", "instances": [1, 2, 3, 4, 5, 6, 7, 8],
+      "params": ["lfo_{n}_sync", "lfo_{n}_frequency", "lfo_{n}_tempo", "lfo_{n}_sync_type", "lfo_{n}_phase",
+                 "lfo_{n}_fade_time", "lfo_{n}_delay_time", "lfo_{n}_stereo", "lfo_{n}_smooth_mode",
+                 "lfo_{n}_smooth_time"]
+    },
+    {
+      "id": "random", "title": "Random", "instances": [1, 2, 3, 4],
+      "params": ["random_{n}_style", "random_{n}_sync", "random_{n}_frequency", "random_{n}_tempo",
+                 "random_{n}_stereo", "random_{n}_sync_type"]
+    },
+    {
+      "id": "chorus", "title": "Chorus", "switch": "chorus_on",
+      "params": ["chorus_dry_wet", "chorus_voices", "chorus_frequency", "chorus_sync", "chorus_tempo",
+                 "chorus_mod_depth", "chorus_feedback", "chorus_delay_1", "chorus_delay_2", "chorus_cutoff",
+                 "chorus_spread"]
+    },
+    {
+      "id": "delay", "title": "Delay", "switch": "delay_on",
+      "params": ["delay_dry_wet", "delay_style", "delay_sync", "delay_frequency", "delay_tempo",
+                 "delay_feedback", "delay_filter_cutoff", "delay_filter_spread"]
+    },
+    {
+      "id": "reverb", "title": "Reverb", "switch": "reverb_on",
+      "params": ["reverb_dry_wet", "reverb_size", "reverb_decay_time", "reverb_delay",
+                 "reverb_pre_low_cutoff", "reverb_pre_high_cutoff", "reverb_low_shelf_cutoff",
+                 "reverb_low_shelf_gain", "reverb_high_shelf_cutoff", "reverb_high_shelf_gain",
+                 "reverb_chorus_amount", "reverb_chorus_frequency"]
+    },
+    {
+      "id": "distortion", "title": "Distortion", "switch": "distortion_on",
+      "params": ["distortion_type", "distortion_drive", "distortion_mix", "distortion_filter_order",
+                 "distortion_filter_cutoff", "distortion_filter_resonance", "distortion_filter_blend"]
+    },
+    {
+      "id": "phaser", "title": "Phaser", "switch": "phaser_on",
+      "params": ["phaser_dry_wet", "phaser_sync", "phaser_frequency", "phaser_tempo", "phaser_feedback",
+                 "phaser_center", "phaser_mod_depth", "phaser_phase_offset", "phaser_blend"]
+    },
+    {
+      "id": "flanger", "title": "Flanger", "switch": "flanger_on",
+      "params": ["flanger_dry_wet", "flanger_sync", "flanger_frequency", "flanger_tempo", "flanger_feedback",
+                 "flanger_center", "flanger_mod_depth", "flanger_phase_offset"]
+    },
+    {
+      "id": "compressor", "title": "Compressor", "switch": "compressor_on",
+      "params": ["compressor_mix", "compressor_attack", "compressor_release", "compressor_enabled_bands",
+                 "compressor_low_gain", "compressor_band_gain", "compressor_high_gain"]
+    },
+    {
+      "id": "eq", "title": "EQ", "switch": "eq_on",
+      "params": ["eq_low_mode", "eq_low_cutoff", "eq_low_gain", "eq_low_resonance",
+                 "eq_band_mode", "eq_band_cutoff", "eq_band_gain", "eq_band_resonance",
+                 "eq_high_mode", "eq_high_cutoff", "eq_high_gain", "eq_high_resonance"]
+    },
+    {
+      "id": "voice", "title": "Voice",
+      "params": ["volume", "polyphony", "voice_priority", "voice_override", "legato", "portamento_time",
+                 "portamento_slope", "portamento_force", "portamento_scale", "pitch_bend_range",
+                 "velocity_track", "voice_tune", "voice_transpose", "stereo_mode", "oversampling",
+                 "beats_per_minute", "mpe_enabled"]
+    }
+  ]
+}

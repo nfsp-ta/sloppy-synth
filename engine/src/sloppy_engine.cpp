@@ -12,6 +12,9 @@
 
 namespace sloppy {
 
+  // Defined in common_unity.cpp, next to Vital's parameter table.
+  size_t valueNameCount(const std::string* lookup);
+
   Engine::Engine() {
     loadInitPatch();
     prepare(sample_rate_, vital::kMaxBufferSize);
@@ -129,6 +132,18 @@ namespace sloppy {
     info.max = details.max;
     info.default_value = details.default_value;
     info.value = controls_[name]->value();
+    info.value_scale = details.value_scale;
+    info.post_offset = details.post_offset;
+    info.display_multiply = details.display_multiply;
+    info.display_invert = details.display_invert;
+    info.units = details.display_units;
+    info.options.clear();
+    if (details.string_lookup && details.value_scale == vital::ValueDetails::kIndexed) {
+      size_t count = std::min<size_t>(static_cast<size_t>(details.max - details.min) + 1,
+                                      valueNameCount(details.string_lookup));
+      for (size_t i = 0; i < count; ++i)
+        info.options.push_back(details.string_lookup[i]);
+    }
     return true;
   }
 

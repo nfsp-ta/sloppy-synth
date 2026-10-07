@@ -55,7 +55,7 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist/sloppy-synth-${{ matrix.name }}
-          cp build/sloppy-synth build/sloppy-render README.md vital/LICENSE dist/sloppy-synth-${{ matrix.name }}/
+          cp -r build/sloppy-synth build/sloppy-render build/web README.md vital/LICENSE dist/sloppy-synth-${{ matrix.name }}/
           tar -C dist -czf sloppy-synth-${{ matrix.name }}.tar.gz sloppy-synth-${{ matrix.name }}
 
       - uses: actions/upload-artifact@v4

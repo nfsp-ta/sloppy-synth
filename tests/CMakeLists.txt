@@ -16,3 +16,10 @@ add_test(NAME render_rejects_future_patch
          COMMAND sloppy-render ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/from_the_future.vital
                  -o ${CMAKE_CURRENT_BINARY_DIR}/future.wav)
 set_tests_properties(render_rejects_future_patch PROPERTIES WILL_FAIL TRUE)
+
+add_executable(control_tests control_tests.cpp)
+target_link_libraries(control_tests PRIVATE sloppy_engine)
+target_compile_definitions(control_tests PRIVATE
+  SLOPPY_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+  SLOPPY_WEB_DIR="${PROJECT_SOURCE_DIR}/web")
+add_test(NAME control_tests COMMAND control_tests)

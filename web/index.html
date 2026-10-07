@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#14161b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>sloppy-synth</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-button" id="prev-patch" aria-label="Previous patch">&#x2039;</button>
+    <button class="patch-title" id="patch-title" aria-label="Browse patches">
+      <span class="patch-name" id="patch-name">Init</span>
+      <span class="patch-meta" id="patch-meta"></span>
+    </button>
+    <button class="icon-button" id="next-patch" aria-label="Next patch">&#x203A;</button>
+    <span class="status" id="status" title="Disconnected" aria-live="polite"></span>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="play" aria-selected="true">Play</button>
+    <button role="tab" data-view="patches" aria-selected="false">Patches</button>
+    <button role="tab" data-view="edit" aria-selected="false">Edit</button>
+  </nav>
+
+  <main>
+    <section class="view" id="view-play" data-view="play">
+      <div class="macros" id="macros"></div>
+      <div class="play-controls">
+        <button class="pill" id="octave-down" aria-label="Octave down">Oct &minus;</button>
+        <span class="octave" id="octave-label">C3</span>
+        <button class="pill" id="octave-up" aria-label="Octave up">Oct +</button>
+        <button class="pill" id="panic" aria-label="All notes off">Panic</button>
+      </div>
+      <div class="keyboard" id="keyboard" aria-label="Keyboard"></div>
+    </section>
+
+    <section class="view" id="view-patches" data-view="patches" hidden>
+      <input class="search" id="patch-search" type="search" placeholder="Search patches" autocomplete="off">
+      <div class="patch-list" id="patch-list"></div>
+    </section>
+
+    <section class="view" id="view-edit" data-view="edit" hidden>
+      <div class="page-chips" id="page-chips" role="tablist"></div>
+      <div class="page-header">
+        <div class="instances" id="instances"></div>
+        <label class="switch" id="page-switch" hidden>
+          <input type="checkbox" id="page-switch-input">
+          <span>On</span>
+        </label>
+      </div>
+      <div class="controls" id="controls"></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
