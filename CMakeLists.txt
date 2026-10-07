@@ -35,7 +35,7 @@ string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _proc)
 if(ANDROID)
   # The Android NDK picks the ABI flags itself.
   if(ANDROID_ABI STREQUAL "armeabi-v7a")
-    list(APPEND SLOPPY_ARCH_DEFINES NEON_ARM32=1)
+    list(APPEND SLOPPY_ARCH_DEFINES NEON_ARM32=1 _FILE_OFFSET_BITS=64)
   endif()
 elseif(_proc MATCHES "^(aarch64|arm64)")
   set(SLOPPY_ARCH_FLAGS -march=armv8-a -mtune=${SLOPPY_ARM_CPU})
@@ -45,6 +45,11 @@ elseif(_proc MATCHES "^arm")
   # reciprocal-estimate path instead.
   set(SLOPPY_ARCH_FLAGS -march=armv8-a+crc -mtune=${SLOPPY_ARM_CPU} -mfpu=neon-fp-armv8 -mfloat-abi=hard)
   list(APPEND SLOPPY_ARCH_DEFINES NEON_ARM32=1)
+  # 64-bit file offsets and inodes. Without this, readdir() on a 32-bit
+  # userland can fail with EOVERFLOW when the kernel or filesystem hands
+  # back 64-bit values (64-bit Pi kernels, qemu-user), and patch library
+  # scans silently come back short.
+  list(APPEND SLOPPY_ARCH_DEFINES _FILE_OFFSET_BITS=64)
 elseif(_proc MATCHES "^(x86_64|amd64|i.86)")
   set(SLOPPY_ARCH_FLAGS -msse2)
 endif()
