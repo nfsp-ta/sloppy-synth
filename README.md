@@ -75,8 +75,9 @@ ready-to-run binaries for x86_64, aarch64 and armhf.
 ./sloppy-render "My Patch.vital" -n C3,E3,G3,B3 -l 4 -o out.wav
 ```
 
-`sloppy-synth` also serves the web UI, on port 8080 by default, and prints
-its address at startup. Open it on a phone or tablet on the same network to
+`sloppy-synth` also serves the web UI, on port 8080 by default (or the next
+free port if another program has 8080), and prints its address at startup. Open
+it on a phone or tablet on the same network to
 play, browse patches and edit sounds; several devices can be connected at
 once and stay in sync. `--http-bind 127.0.0.1` keeps it local and `--no-web`
 turns it off. The protocol is in [docs/PROTOCOL.md](docs/PROTOCOL.md).

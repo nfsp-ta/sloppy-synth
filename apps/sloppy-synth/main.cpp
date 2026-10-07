@@ -43,7 +43,7 @@ namespace {
       "      --list-devices      List audio and MIDI devices, then exit\n"
       "      --audition NOTE     Play a note (MIDI number or name, e.g. C3) for a second\n"
       "                          after starting, to check audio without a controller\n"
-      "      --http-port PORT    Port for the web UI (default: 8080)\n"
+      "      --http-port PORT    Port for the web UI (default: 8080, or the next free one)\n"
       "      --http-bind ADDR    Address to serve the web UI on (default: all, so phones\n"
       "                          on the same network can connect; 127.0.0.1 for local only)\n"
       "      --web-root DIR      Web UI files (default: the web folder next to the program)\n"
@@ -284,6 +284,7 @@ int main(int argc, const char* argv[]) {
 
   String patch_path, device_name, library_path, import_bank, audition_note, http_bind, web_root_path;
   int http_port = 8080;
+  bool http_port_given = false;
   bool serve_web = true;
   double sample_rate = 48000.0;
   int buffer_size = 256;
@@ -311,7 +312,7 @@ int main(int argc, const char* argv[]) {
     else if (arg == "--list-patches") list_patches = true;
     else if (arg == "--list-devices") list_devices = true;
     else if (arg == "--audition") audition_note = next();
-    else if (arg == "--http-port") http_port = next().getIntValue();
+    else if (arg == "--http-port") { http_port = next().getIntValue(); http_port_given = true; }
     else if (arg == "--http-bind") http_bind = next();
     else if (arg == "--web-root") web_root_path = next();
     else if (arg == "--no-web") serve_web = false;
@@ -365,14 +366,23 @@ int main(int argc, const char* argv[]) {
           std::cerr << "Web UI files not found; use --web-root. Serving the control socket only.\n";
         server = std::make_unique<sloppy::ControlServer>(player, web_root);
         std::string error;
-        if (server->start(http_port, http_bind, error)) {
+        bool started = server->start(http_port, http_bind, error);
+        // Without --http-port, step past ports other programs already use.
+        for (int port = http_port + 1; !started && !http_port_given && port < http_port + 10; ++port) {
+          if (server->start(port, http_bind, error))
+            started = true;
+        }
+        if (started) {
+          if (http_port != 0 && server->getPort() != http_port)
+            std::cout << "Port " << http_port << " is in use, so the web UI is on port " << server->getPort() << ".\n";
           if (http_bind.isEmpty())
             printWebAddresses(server->getPort());
           else
             std::cout << "Web UI: http://" << http_bind << ":" << server->getPort() << "/\n";
         }
         else {
-          std::cerr << "Web UI disabled: " << error << "\n";
+          std::cerr << "Web UI disabled: " << error << ". Another program may be using it; "
+                       "pick a free one with --http-port.\n";
           server.reset();
         }
       }
