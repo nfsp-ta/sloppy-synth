@@ -1,0 +1,64 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    # Debian bookworm matches Raspberry Pi OS (bookworm), so the ARM binaries
+    # built here link against the same glibc the Pi has.
+    container: debian:bookworm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            arch: amd64
+            toolchain: ""
+          - name: linux-aarch64
+            arch: arm64
+            toolchain: cmake/toolchains/aarch64-linux-gnu.cmake
+          - name: linux-armhf
+            arch: armhf
+            toolchain: cmake/toolchains/arm-linux-gnueabihf.cmake
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          dpkg --add-architecture ${{ matrix.arch }}
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build python3 \
+            libasound2-dev:${{ matrix.arch }}
+          if [ "${{ matrix.arch }}" = amd64 ]; then
+            apt-get install -y --no-install-recommends build-essential
+          else
+            apt-get install -y --no-install-recommends crossbuild-essential-${{ matrix.arch }} qemu-user
+          fi
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            ${{ matrix.toolchain && format('-DCMAKE_TOOLCHAIN_FILE={0}', matrix.toolchain) || '' }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          mkdir -p dist/sloppy-synth-${{ matrix.name }}
+          cp build/sloppy-synth build/sloppy-render README.md vital/LICENSE dist/sloppy-synth-${{ matrix.name }}/
+          tar -C dist -czf sloppy-synth-${{ matrix.name }}.tar.gz sloppy-synth-${{ matrix.name }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sloppy-synth-${{ matrix.name }}
+          path: sloppy-synth-${{ matrix.name }}.tar.gz
