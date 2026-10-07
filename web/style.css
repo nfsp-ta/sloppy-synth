@@ -434,15 +434,23 @@ main {
   gap: 8px;
   margin-top: 4px;
 }
-.routes-add select { flex: 1 1 200px; width: auto; }
+.routes-add select { flex: 1 1 200px; width: auto; max-width: 480px; }
 .routes-add .pill { flex: none; }
 .routing {
   border-radius: var(--radius);
 }
-.routes .routing {
-  background: var(--panel-2);
-  padding: 8px 10px 10px;
+/* Routings inside a source's card sit on the page color, so their slider
+   tracks and off toggles stand out the same way they do on the Mod page. On
+   wide screens they flow into columns the width of an ordinary control. */
+.routes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  gap: 8px;
   margin-bottom: 8px;
+}
+.routes .routing {
+  background: var(--bg);
+  padding: 8px 10px 10px;
 }
 .routing-head {
   display: flex;

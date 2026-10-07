@@ -1012,7 +1012,12 @@ function makeRoutesCard(source) {
     note.textContent = `${sourceLabel(source)} isn't routed anywhere yet, so it has no effect on the sound.`;
     card.append(note);
   }
-  for (const modulation of routes) card.append(makeRouting(modulation, "destination"));
+  if (routes.length) {
+    const list = document.createElement("div");
+    list.className = "routes-list";
+    for (const modulation of routes) list.append(makeRouting(modulation, "destination"));
+    card.append(list);
+  }
 
   const add = document.createElement("div");
   add.className = "routes-add";
