@@ -88,6 +88,24 @@ await page({ width: 1280, height: 800 }, 'desktop', async (p) => {
   console.log('after S up, down keys:', await p.locator('.key.down').count());
   console.log('octave:', before, '->', await p.textContent('#octave-label'));
   await p.screenshot({ path: `${out}/desktop-play.png` });
+  // Scroll wheel over a macro knob and over an edit-page slider.
+  const knob = p.locator('.knob').first();
+  const kb = await knob.boundingBox();
+  await p.waitForTimeout(500);
+  await p.mouse.move(kb.x + kb.width / 2, kb.y + kb.height / 2);
+  await p.mouse.wheel(0, -300);
+  await p.waitForTimeout(100);
+  console.log('macro after wheel up:', await knob.locator('.knob-value').textContent());
+  await p.click('.tabs button[data-view="edit"]');
+  await p.locator('.chip', { hasText: 'Filter' }).click();
+  const cutoff = p.locator('.control', { hasText: 'Cutoff' }).first();
+  const sb = await cutoff.locator('input[type="range"]').boundingBox();
+  const was = await cutoff.locator('.control-value').textContent();
+  await p.waitForTimeout(500);
+  await p.mouse.move(sb.x + sb.width / 2, sb.y + sb.height / 2);
+  await p.mouse.wheel(0, 200);
+  await p.waitForTimeout(100);
+  console.log('cutoff after wheel down:', was, '->', await cutoff.locator('.control-value').textContent());
 }, false);
 await browser.close();
 console.log('errors:', errors.length ? errors : 'none');

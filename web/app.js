@@ -245,6 +245,36 @@ function arcPath(cx, cy, r, startDeg, endDeg) {
   return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
 }
 
+// Mouse wheel and trackpad over a slider or knob change its value: one wheel
+// notch moves 2% of the range, or 0.4% with Shift. A wheel that was already
+// scrolling the page keeps scrolling it when the pointer crosses a control.
+let lastPageScroll = 0;
+window.addEventListener("scroll", () => { lastPageScroll = performance.now(); }, { capture: true, passive: true });
+
+function wheelControl(el, name, info, indexed = false) {
+  let pending = 0;
+  el.addEventListener("wheel", (event) => {
+    if (performance.now() - lastPageScroll < 400) return;
+    // Shift+wheel arrives as deltaX in some browsers.
+    const raw = event.deltaY || event.deltaX;
+    const delta = event.deltaMode === 1 ? raw * 33 : event.deltaMode === 2 ? raw * 400 : raw;
+    if (!delta) return;
+    event.preventDefault();
+    const range = info.max - info.min;
+    const value = state.values[name] ?? info.default;
+    if (indexed) {
+      pending -= delta / 100;
+      const steps = Math.trunc(pending);
+      if (!steps) return;
+      pending -= steps;
+      setParam(name, clamp(Math.round(value) + steps, info.min, info.max));
+    } else {
+      const notch = range * (event.shiftKey ? 0.004 : 0.02);
+      setParam(name, clamp(value - (delta / 100) * notch, info.min, info.max));
+    }
+  }, { passive: false });
+}
+
 function makeKnob(name, title) {
   const info = state.info[name];
   const el = document.createElement("div");
@@ -302,6 +332,7 @@ function makeKnob(name, title) {
   el.addEventListener("pointerup", end);
   el.addEventListener("pointercancel", end);
   el.addEventListener("dblclick", () => setParam(name, info.default));
+  wheelControl(el, name, info);
   el.addEventListener("keydown", (event) => {
     const step = (info.max - info.min) / (event.shiftKey ? 100 : 20);
     const value = state.values[name] ?? info.default;
@@ -880,6 +911,7 @@ function makeControl(name, label, format = null) {
     slider.addEventListener("pointerup", release);
     slider.addEventListener("pointercancel", release);
     slider.addEventListener("input", () => setParam(name, Number(slider.value)));
+    wheelControl(slider, name, info, info.scale === SCALE.indexed);
     head.addEventListener("dblclick", () => setParam(name, info.default));
     el.append(slider);
     update = (value) => {
