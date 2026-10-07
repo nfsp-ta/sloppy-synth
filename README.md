@@ -82,6 +82,10 @@ play, browse patches and edit sounds; several devices can be connected at
 once and stay in sync. `--http-bind 127.0.0.1` keeps it local and `--no-web`
 turns it off. The protocol is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
+On a computer, the keyboard plays the piano in the web UI: the A row is the
+white keys from C, the row above it the black keys, and Z and X change octave.
+The letters are shown on the piano keys.
+
 MIDI program changes switch between library patches (bank select MSB picks
 the next group of 128). The library lives in `~/.local/share/sloppy-synth`
 unless `--library` or `$SLOPPY_DATA_DIR` says otherwise; it can also point

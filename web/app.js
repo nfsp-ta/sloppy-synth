@@ -330,6 +330,22 @@ const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", 
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const heldByPointer = new Map(); // pointerId -> note
 
+// The physical keys that play notes, from C upward, and the letters shown on
+// the piano. Labels follow the user's layout where the browser can tell us.
+const QWERTY_CODES = ["KeyA", "KeyW", "KeyS", "KeyE", "KeyD", "KeyF", "KeyT", "KeyG", "KeyY",
+  "KeyH", "KeyU", "KeyJ", "KeyK", "KeyO", "KeyL", "KeyP", "Semicolon", "Quote"];
+let qwertyLabels = QWERTY_CODES.map((code) =>
+  code.startsWith("Key") ? code.slice(3) : code === "Semicolon" ? ";" : "'");
+
+async function loadKeyLabels() {
+  try {
+    const map = await navigator.keyboard?.getLayoutMap?.();
+    if (!map) return;
+    qwertyLabels = QWERTY_CODES.map((code, i) => (map.get(code) || qwertyLabels[i]).toUpperCase());
+    renderKeyboard();
+  } catch { /* keep the QWERTY letters */ }
+}
+
 function keyboardOctaves() {
   const width = $("keyboard").clientWidth || window.innerWidth;
   return width >= 1100 ? 4 : width >= 700 ? 3 : 2;
@@ -364,6 +380,13 @@ function renderKeyboard() {
         key.append(label);
       }
       whiteIndex++;
+    }
+    const index = note - first;
+    if (index < QWERTY_CODES.length) {
+      const letter = document.createElement("span");
+      letter.className = "key-letter";
+      letter.textContent = qwertyLabels[index];
+      key.append(letter);
     }
     keyboard.append(key);
   }
@@ -427,26 +450,37 @@ function setupKeyboard() {
   $("octave-up").addEventListener("click", () => { state.octave = Math.min(8, state.octave + 1); renderKeyboard(); });
   $("panic").addEventListener("click", () => { releaseAllKeys(); send({ type: "all_notes_off" }); });
 
-  // Computer keyboard: two rows like most DAWs (A = C, W = C#, ...).
-  const keys = "awsedftgyhujkolp;'";
-  const held = new Set();
+  // Computer keyboard: two rows like most DAWs (A = C, W = C#, ...), Z and X
+  // for octaves. Keys are matched by position (event.code), so the layout
+  // still works on AZERTY or Dvorak keyboards.
+  const held = new Map(); // event.code -> note
   window.addEventListener("keydown", (event) => {
-    if (event.repeat || event.metaKey || event.ctrlKey || event.target.matches("input, select")) return;
-    const index = keys.indexOf(event.key.toLowerCase());
-    if (index < 0 || held.has(index)) return;
-    held.add(index);
+    if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.target.matches("input, select, textarea")) return;
+    if (event.code === "KeyZ" || event.code === "KeyX") {
+      $(event.code === "KeyZ" ? "octave-down" : "octave-up").click();
+      return;
+    }
+    const index = QWERTY_CODES.indexOf(event.code);
+    if (index < 0 || held.has(event.code)) return;
     const note = state.octave * 12 + index;
+    if (note > 127) return;
+    held.set(event.code, note);
     document.querySelector(`.key[data-note="${note}"]`)?.classList.add("down");
     send({ type: "note", note, velocity: 0.8, on: true });
   });
-  window.addEventListener("keyup", (event) => {
-    const index = keys.indexOf(event.key.toLowerCase());
-    if (index < 0 || !held.has(index)) return;
-    held.delete(index);
-    const note = state.octave * 12 + index;
-    document.querySelector(`.key[data-note="${note}"]`)?.classList.remove("down");
-    send({ type: "note", note, on: false });
-  });
+  const release = (code) => {
+    const note = held.get(code);
+    if (note === undefined) return;
+    held.delete(code);
+    if (![...held.values()].includes(note) && ![...heldByPointer.values()].includes(note)) {
+      document.querySelector(`.key[data-note="${note}"]`)?.classList.remove("down");
+      send({ type: "note", note, on: false });
+    }
+  };
+  window.addEventListener("keyup", (event) => release(event.code));
+  window.addEventListener("blur", () => { for (const code of [...held.keys()]) release(code); });
+  loadKeyLabels();
 
   let lastOctaves = 0;
   const resize = () => {

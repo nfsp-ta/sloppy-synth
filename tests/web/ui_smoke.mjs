@@ -6,8 +6,8 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const url = process.argv[2], out = process.argv[3];
 const browser = await chromium.launch();
 const errors = [];
-async function page(viewport, name, actions) {
-  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, hasTouch: true });
+async function page(viewport, name, actions, hasTouch = true) {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, hasTouch });
   const p = await ctx.newPage();
   p.on('console', m => { if (m.type() === 'error') errors.push(`${name}: ${m.text()}`); });
   p.on('pageerror', e => errors.push(`${name}: ${e.message}`));
@@ -76,5 +76,18 @@ await page({ width: 1180, height: 820 }, 'tablet', async (p) => {
   await p.locator('.chip', { hasText: 'Osc' }).click();
   await p.screenshot({ path: `${out}/tablet-edit.png` });
 });
+await page({ width: 1280, height: 800 }, 'desktop', async (p) => {
+  // Computer keyboard: letters show on the piano, S plays D, X moves up an octave.
+  console.log('key letters:', (await p.locator('.key-letter').allTextContents()).slice(0, 5).join(' '),
+    'visible:', await p.locator('.key-letter').first().isVisible());
+  const before = await p.textContent('#octave-label');
+  await p.keyboard.down('s');
+  console.log('S held, down keys:', await p.locator('.key.down').evaluateAll(k => k.map(e => e.dataset.note)));
+  await p.keyboard.press('x');
+  await p.keyboard.up('s');
+  console.log('after S up, down keys:', await p.locator('.key.down').count());
+  console.log('octave:', before, '->', await p.textContent('#octave-label'));
+  await p.screenshot({ path: `${out}/desktop-play.png` });
+}, false);
 await browser.close();
 console.log('errors:', errors.length ? errors : 'none');

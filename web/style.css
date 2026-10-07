@@ -230,6 +230,23 @@ main {
   pointer-events: none;
 }
 
+/* Computer-keyboard letters, only where there's likely a keyboard. */
+.key .key-letter {
+  display: none;
+  position: absolute;
+  bottom: 24px;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7d8597;
+  pointer-events: none;
+}
+.key.black .key-letter { bottom: 8px; color: #8d93a3; }
+@media (hover: hover) and (pointer: fine) {
+  .key .key-letter { display: block; }
+}
+
 /* ---- Patches ---------------------------------------------------------- */
 .search {
   margin: 10px 12px;
