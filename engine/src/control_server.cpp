@@ -153,12 +153,14 @@ namespace sloppy {
       void stop() {
         if (!running_.exchange(false))
           return;
-        if (listener_)
-          listener_->close();
+        // Threads first: JUCE sockets must not be closed while another
+        // thread is using them. Both loops wake at least every 200 ms.
         if (accept_thread_)
           accept_thread_->stopThread(2000);
         if (broadcast_thread_)
           broadcast_thread_->stopThread(2000);
+        if (listener_)
+          listener_->close();
 
         std::vector<std::shared_ptr<Client>> clients;
         {
@@ -205,12 +207,15 @@ namespace sloppy {
             thread_->startThread();
           }
 
+          // Called from other threads, never the client's own. The socket is
+          // only closed once the client thread has finished with it.
           void shutdown() {
             alive_ = false;
+            if (thread_)
+              thread_->stopThread(2000);
+            std::lock_guard<std::mutex> lock(write_mutex_);
             if (socket_)
               socket_->close();
-            if (thread_ && Thread::getCurrentThread() != thread_.get())
-              thread_->stopThread(2000);
           }
 
           bool isAlive() const { return alive_; }
@@ -509,8 +514,8 @@ namespace sloppy {
         break;
       }
     }
+    // The server notices within one broadcast tick and closes the socket.
     alive_ = false;
-    socket_->close();
   }
 
   bool ControlServer::Impl::Client::handleHttp(const std::string& request) {
