@@ -27,6 +27,10 @@ if(SLOPPY_QEMU)
   if(SLOPPY_SYSROOT)
     set(CMAKE_CROSSCOMPILING_EMULATOR ${SLOPPY_QEMU} -L ${SLOPPY_SYSROOT})
   else()
-    set(CMAKE_CROSSCOMPILING_EMULATOR ${SLOPPY_QEMU} -L /usr/arm-linux-gnueabihf)
+    # Load libc from the cross toolchain too, not the multiarch copy in
+    # /lib/arm-linux-gnueabihf: its version can differ from the cross ld.so's,
+    # and a mismatched pair crashes in pthread_create.
+    set(CMAKE_CROSSCOMPILING_EMULATOR ${SLOPPY_QEMU} -L /usr/arm-linux-gnueabihf
+        -E LD_LIBRARY_PATH=/usr/arm-linux-gnueabihf/lib)
   endif()
 endif()

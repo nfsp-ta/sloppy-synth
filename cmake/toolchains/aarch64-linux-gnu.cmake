@@ -27,6 +27,10 @@ if(SLOPPY_QEMU)
   if(SLOPPY_SYSROOT)
     set(CMAKE_CROSSCOMPILING_EMULATOR ${SLOPPY_QEMU} -L ${SLOPPY_SYSROOT})
   else()
-    set(CMAKE_CROSSCOMPILING_EMULATOR ${SLOPPY_QEMU} -L /usr/aarch64-linux-gnu)
+    # Load libc from the cross toolchain too, not the multiarch copy in
+    # /lib/aarch64-linux-gnu: its version can differ from the cross ld.so's,
+    # and a mismatched pair crashes in pthread_create.
+    set(CMAKE_CROSSCOMPILING_EMULATOR ${SLOPPY_QEMU} -L /usr/aarch64-linux-gnu
+        -E LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib)
   endif()
 endif()
