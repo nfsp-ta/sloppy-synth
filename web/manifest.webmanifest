@@ -1,0 +1,10 @@
+{
+  "name": "sloppy-synth",
+  "short_name": "sloppy",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#14161b",
+  "theme_color": "#14161b",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

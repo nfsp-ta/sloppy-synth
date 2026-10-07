@@ -1,0 +1,6 @@
+/build/
+/build-*/
+/dist/
+*.wav
+!tests/fixtures/*.wav
+.DS_Store
