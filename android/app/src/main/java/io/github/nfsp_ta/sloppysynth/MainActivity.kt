@@ -7,6 +7,7 @@ package io.github.nfsp_ta.sloppysynth
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -15,10 +16,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -34,28 +37,17 @@ import java.util.concurrent.Executors
  */
 class MainActivity : Activity() {
     private lateinit var webView: WebView
+    private lateinit var root: FrameLayout
     private val worker = Executors.newSingleThreadExecutor()
     private var port = -1
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // An instrument shouldn't go dark mid-song.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        webView = WebView(this).apply {
-            setBackgroundColor(BACKGROUND)
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.setSupportZoom(false)
-            settings.builtInZoomControls = false
-            // The UI's layout is designed for the screen size; system font
-            // scaling would push controls off it.
-            settings.textZoom = 100
-            webViewClient = LocalOnlyClient()
-            addJavascriptInterface(Bridge(), "SloppyAndroid")
-        }
-        val root = FrameLayout(this).apply {
+        webView = createWebView()
+        root = FrameLayout(this).apply {
             setBackgroundColor(BACKGROUND)
             addView(webView)
         }
@@ -67,6 +59,20 @@ class MainActivity : Activity() {
         requestNotificationPermission()
         startSynth()
         handleIncoming(intent)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun createWebView() = WebView(this).apply {
+        setBackgroundColor(BACKGROUND)
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.setSupportZoom(false)
+        settings.builtInZoomControls = false
+        // The UI's layout is designed for the screen size; system font
+        // scaling would push controls off it.
+        settings.textZoom = 100
+        webViewClient = LocalOnlyClient()
+        addJavascriptInterface(Bridge(), "SloppyAndroid")
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -233,6 +239,23 @@ class MainActivity : Activity() {
 
     /** Keeps the WebView on the synth's own pages; anything else opens in a browser. */
     private inner class LocalOnlyClient : WebViewClient() {
+        // The page runs in a separate renderer process, which Android may
+        // kill when memory runs short (an old phone with the synth loaded,
+        // rotating the screen). Unhandled, that kills the whole app, synth
+        // included; instead, make a new WebView and load the UI again.
+        // Only called on Android 8+, where the renderer is a separate process.
+        @TargetApi(26)
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            Log.e(TAG, "Web UI renderer gone (crashed: ${detail.didCrash()}), reloading it")
+            if (view !== webView) return true
+            root.removeView(view)
+            view.destroy()
+            webView = createWebView()
+            root.addView(webView)
+            if (port > 0) webView.loadUrl("http://127.0.0.1:$port/")
+            return true
+        }
+
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url
             if (url.host == "127.0.0.1" && url.port == port) return false
@@ -245,6 +268,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val TAG = "sloppy-synth"
         private const val REQUEST_IMPORT = 1
         private val BACKGROUND = Color.parseColor("#14161b")
     }
