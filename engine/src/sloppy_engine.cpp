@@ -6,12 +6,16 @@
 #include "sloppy_engine.h"
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 
 #include "json/json.h"
 #include "load_save.h"
 #include "modulation_connection_processor.h"
 #include "sound_engine.h"
+#include "synth_constants.h"
+#include "formant_filter.h"
+#include "synth_oscillator.h"
 #include "synth_parameters.h"
 
 namespace sloppy {
@@ -79,6 +83,53 @@ namespace sloppy {
     }
   }
 
+  namespace {
+    // Vital 1.5 added "Octave + 7" as the fifth unison stack style, moving
+    // every later style up by one, and "Sub Harmonics" at the end. Patches
+    // from 1.5 on use that numbering; this engine still uses 1.0's.
+    constexpr const char* kStackRenumberedVersion = "1.5.0";
+    constexpr int kOctavePlus7Stack = 4;
+    constexpr int kSubHarmonicsStack = 12;
+
+    std::string stackStyleName(int oscillator) {
+      return "osc_" + std::to_string(oscillator) + "_stack_style";
+    }
+
+    // Converts stack styles from Vital 1.5's numbering to this engine's.
+    void stackStylesFromNewer(json& settings, std::vector<std::string>& warnings) {
+      for (int i = 1; i <= vital::kNumOscillators; ++i) {
+        std::string name = stackStyleName(i);
+        if (!settings.count(name) || !settings[name].is_number())
+          continue;
+        int style = static_cast<int>(std::round(settings[name].get<float>()));
+        std::string label = "Oscillator " + std::to_string(i) + " Stack Style";
+        if (style == kOctavePlus7Stack) {
+          style = vital::SynthOscillator::kOctave;
+          warnings.push_back(label + " is Octave + 7, which this engine doesn't have yet, so it plays as Octave.");
+        }
+        else if (style >= kSubHarmonicsStack) {
+          style = vital::SynthOscillator::kNormal;
+          warnings.push_back(label + " is Sub Harmonics, which this engine doesn't have yet, so it plays as Unison.");
+        }
+        else if (style > kOctavePlus7Stack) {
+          style -= 1;
+        }
+        settings[name] = static_cast<float>(style);
+      }
+    }
+
+    void stackStylesToNewer(json& settings) {
+      for (int i = 1; i <= vital::kNumOscillators; ++i) {
+        std::string name = stackStyleName(i);
+        if (!settings.count(name) || !settings[name].is_number())
+          continue;
+        int style = static_cast<int>(std::round(settings[name].get<float>()));
+        if (style >= kOctavePlus7Stack)
+          settings[name] = static_cast<float>(style + 1);
+      }
+    }
+  }
+
   bool Engine::loadPatch(const File& file, std::string& error) {
     if (!file.existsAsFile()) {
       error = "Patch file not found: " + file.getFullPathName().toStdString();
@@ -128,10 +179,12 @@ namespace sloppy {
       error = "Preset was created with Vital " + version + ", which is too new to load.";
       return false;
     }
+    std::vector<std::string> warnings;
+    if (LoadSave::compareVersionStrings(version, kStackRenumberedVersion) >= 0 && state.count("settings"))
+      stackStylesFromNewer(state["settings"], warnings);
     if (LoadSave::compareFeatureVersionStrings(version, ProjectInfo::versionString) > 0)
       state["synth_version"] = ProjectInfo::versionString;
 
-    std::vector<std::string> warnings;
     {
       ScopedLock lock(getCriticalSection());
       try {
@@ -140,6 +193,8 @@ namespace sloppy {
           return false;
         }
         checkUnsupported(state, version, warnings);
+        if (!warnings.empty())
+          warnings.insert(warnings.begin(), "Made with Vital " + version + ", so it may not sound the same here.");
       }
       catch (const json::exception& e) {
         error = std::string("Preset file is corrupted: ") + e.what();
@@ -186,6 +241,42 @@ namespace sloppy {
       }
     }
 
+    bool startsWith(const std::string& text, const std::string& prefix) {
+      return text.compare(0, prefix.size(), prefix) == 0;
+    }
+
+    bool endsWith(const std::string& text, const std::string& suffix) {
+      return text.size() >= suffix.size() &&
+             text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+
+    // Settings that Vital 1.5 and 1.6 write into every patch. At these
+    // values (their defaults in 1.6.4) they change nothing, so they aren't
+    // worth a warning.
+    bool newerSettingAtDefault(const std::string& name, const json& value) {
+      // Curves for the spectral filter, flanger and phaser warps. Patches
+      // that use those warps get a warning for the warp type instead.
+      if (name == "custom_warps")
+        return true;
+      if (name == "random_values") {
+        if (!value.is_array())
+          return false;
+        for (const json& oscillator : value) {
+          if (!oscillator.is_object() || oscillator.value("seed", 4) != 4)
+            return false;
+        }
+        return true;
+      }
+      if (!value.is_number())
+        return false;
+      float number = value.get<float>();
+      if (startsWith(name, "modulation_") && (endsWith(name, "_ramp_up") || endsWith(name, "_ramp_down")))
+        return number == -10.0f;
+      if (startsWith(name, "osc_") && endsWith(name, "_spectral_morph_phase"))
+        return number == 0.5f;
+      return false;
+    }
+
     template <class Container>
     std::string listNames(const Container& names) {
       std::string list;
@@ -217,12 +308,32 @@ namespace sloppy {
           (value >= details.min - 0.5f && value <= details.max + 0.5f))
         continue;
       control.second->set(details.default_value);
+      // Display-only choices, such as Vital 1.6's mono spectrum view.
+      if (control.first.find("view_") != std::string::npos)
+        continue;
       std::string warning = details.display_name + " uses an option this engine doesn't have";
       int default_index = static_cast<int>(details.default_value - details.min);
       if (details.string_lookup && default_index >= 0 &&
           static_cast<size_t>(default_index) < valueNameCount(details.string_lookup))
         warning += ", so it was set to " + details.string_lookup[default_index];
       warnings.push_back(warning + ".");
+    }
+
+    // The formant filter's third style (vocal tract) is an empty stub in the
+    // public source and outputs silence; Vital 1.6.4 makes sound with it.
+    for (const std::string& filter : { "filter_1", "filter_2", "filter_fx" }) {
+      auto model = controls_.find(filter + "_model");
+      auto style = controls_.find(filter + "_style");
+      if (model == controls_.end() || style == controls_.end() ||
+          std::round(model->second->value()) != vital::constants::kFormant ||
+          std::round(style->second->value()) < vital::FormantFilter::kNumFormantStyles)
+        continue;
+      style->second->set(0.0f);
+      auto on = controls_.find(filter + "_on");
+      if (on != controls_.end() && on->second->value() > 0.5f) {
+        std::string label = vital::Parameters::getDetails(filter + "_style").display_name;
+        warnings.push_back(label + " uses a formant style this engine doesn't have, so it was set to AOIE.");
+      }
     }
 
     // Older patches go through Vital's upgrade code, which renames settings,
@@ -238,8 +349,10 @@ namespace sloppy {
       if (item.key() == "modulations")
         continue;
       auto found = ours.find(item.key());
-      if (found == ours.end())
-        unknown.insert(item.key());
+      if (found == ours.end()) {
+        if (!newerSettingAtDefault(item.key(), item.value()))
+          unknown.insert(item.key());
+      }
       else
         findUnknownKeys(item.value(), *found, item.key(), unknown);
     }
@@ -275,8 +388,21 @@ namespace sloppy {
                          (dropped.size() == 1 ? " modulation" : " modulations") +
                          " this engine can't route: " + listNames(dropped) + ".");
     }
-    if (!warnings.empty())
-      warnings.insert(warnings.begin(), "Made with Vital " + version + ", so it may not sound the same here.");
+  }
+
+  bool Engine::savePatch(const File& file) {
+    File preset = file.withFileExtension(String(vital::kPresetExtension));
+    File parent = preset.getParentDirectory();
+    if (!parent.exists() && !parent.createDirectory().wasOk())
+      return false;
+
+    setPresetName(preset.getFileNameWithoutExtension());
+    json state = saveToJson();
+    stackStylesToNewer(state["settings"]);
+    if (!preset.replaceWithText(state.dump()))
+      return false;
+    active_file_ = preset;
+    return true;
   }
 
   std::vector<std::string> Engine::getLoadWarnings() const {

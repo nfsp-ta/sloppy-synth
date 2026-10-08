@@ -100,6 +100,25 @@ def newer_minor_patch(bass):
     s["osc_1_made_up_seed"] = 0.5
     s["lfos"][0]["made_up_ramp"] = 0.25
     add_modulation(patch, 4, "made_up_source", "filter_1_cutoff", 0.4)
+    # Vital 1.5 renumbered unison stack styles: 5 is "2x Octave" (4 here),
+    # 4 is the new "Octave + 7".
+    s["osc_2_stack_style"] = 5.0
+    s["osc_3_stack_style"] = 4.0
+    # The formant filter's vocal tract style: silent in the public source.
+    s.update({"filter_2_on": 1.0, "filter_2_model": 5.0, "filter_2_style": 2.0})
+    # Settings Vital 1.6.4 writes into every patch, at their defaults.
+    patch["tuning"] = {"default": True, "mapping_name": "", "reference_midi_note": 0.0,
+                       "scale": [float(i) for i in range(13)], "scale_start_midi_note": 60,
+                       "tuning_name": ""}
+    for i in range(1, 65):
+        s["modulation_%d_ramp_up" % i] = -10.0
+        s["modulation_%d_ramp_down" % i] = -10.0
+    for i in range(1, 4):
+        s["osc_%d_spectral_morph_phase" % i] = 0.5
+    triangle = {"name": "Triangle", "num_points": 3, "points": [0.0, 1.0, 0.5, 0.0, 1.0, 1.0],
+                "powers": [0.0, 0.0, 0.0], "smooth": False}
+    s["custom_warps"] = [triangle] * 3
+    s["random_values"] = [{"seed": 4}] * 3
     return patch
 
 

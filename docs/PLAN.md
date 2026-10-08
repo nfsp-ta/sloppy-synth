@@ -41,19 +41,31 @@ Pi Zero 2 W, Pi 3 or newer.
 - Tuning files (`.scl`, `.tun`), already supported by the engine.
 - Check against a set of real-world patches (Ashley's own, or freely
   licensed community banks). Vital's factory presets can't be bundled.
-- Catch up with newer Vital releases. The public source is Vital 1.0.6;
-  1.5 added custom filter, flanger and phaser spectral warps, a seed for
-  the random-amplitude warp and a subharmonic unison mode, and 1.6
-  reportedly a Mod Remap ramp option. Patches using them load today with
-  warnings. Rebuild them clean-room from patches saved by Vital 1.6.4
-  (diff their JSON against ours) and from reference renders of the same
-  MIDI through both synths. Never decompile Vital's binaries or commit
-  them: they aren't GPL. Background: `research/vital-newer-versions.md`
-  in the project files.
-- Compare CPU use against Vital 1.6.4 with its window closed. Newer
-  releases feel faster, but the only audio change Vital has published is
-  for sample rates above 48 kHz; most gains may be in its GUI, which this
-  engine doesn't have.
+- Catch up with Vital 1.6.4. The public source is Vital 1.0.6. Checked
+  against Ashley's copy of 1.6.4 through its plugin interface, this engine
+  lacks: the Data Compress, Spectral Filter, Spectral Flanger, Spectral
+  Phaser and Spectral Contrast warps (plus the per-oscillator warp curve
+  and warp phase they use); the Octave + 7 and Sub Harmonics unison
+  stacks; ramp up and down on each modulation; a seed for the
+  random-amplitude warp; the LFO "Point Cycle" sync; "Multiband" as an
+  oscillator destination; the formant filter's third style (an empty stub
+  in the public source); and per-patch tunings. Patches using them load
+  with warnings. Rebuild them clean-room from how 1.6.4 behaves: settings
+  changed through its plugin interface, and renders of the same patch
+  through both synths. Never decompile Vital's binaries or commit them:
+  they aren't GPL. Background: `research/vital-newer-versions.md` in the
+  project files.
+- Everything else sounds the same: 73 test patches covering every filter
+  model and style, oscillator distortion, spectral warp, unison stack and
+  effect render within 0.5 dB of 1.6.4.
+- 1.6.4 is faster: rendering the same patches on x86_64, it takes 0.6 to
+  0.8 of our time for simple patches, and a quarter of it for a spectral
+  warp on a 16-voice unison oscillator (60 s of audio: 1.3 s against
+  5.0 s). Building our engine with clang or AVX only gains about 10%, so
+  most of the gain is in Vital's code. Start with the spectral warp per
+  unison voice, then profile the rest; see step 8. The same comparison
+  can be repeated with Vital's own `--headless --render` against
+  `SynthBase::renderAudioToFile`, which both engines share.
 
 ### 3. Android
 
@@ -113,6 +125,9 @@ most Vital patches route their key controls through them.
 
 ### 8. Performance work
 
+- Spectral warps on unison oscillators: Vital 1.6.4 is about four times
+  faster here than this engine (see step 2). Work out a faster way from
+  the public 1.0.6 code and measurements alone.
 - Spread voices over several cores. Vital processes voices in one thread;
   splitting the voice handler across worker threads is the biggest possible
   gain but also the most invasive engine change.

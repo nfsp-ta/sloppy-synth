@@ -78,7 +78,8 @@ namespace sloppy {
       // The Vital version that saved the last loaded patch, e.g. "1.6.4".
       std::string getPatchVersion() const;
 
-      bool savePatch(const File& file) { return saveToFile(file); }
+      // Saves in Vital 1.5's numbering, so Vital 1.5 and later read it right.
+      bool savePatch(const File& file);
 
       // Parameters, by Vital's internal names (the keys used in .vital files).
       std::vector<std::string> getParameterNames() const;
