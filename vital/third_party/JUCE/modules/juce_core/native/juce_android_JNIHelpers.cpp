@@ -441,6 +441,14 @@ jobject ActivityLifecycleCallbacks::invoke (jobject proxy, jobject method, jobje
     else if (methodName == "onActivityPostStarted")            { onActivityPostStarted (activity);                   return nullptr; }
     else if (methodName == "onActivityPostStopped")            { onActivityPostStopped (activity);                   return nullptr; }
 
+    // sloppy-synth: newer Android versions add callbacks to this interface
+    // (onActivityConfigurationChanged, called on every screen rotation).
+    // Passing those to the base class invokes them on a plain Object, which
+    // throws and kills the app, so ignore any lifecycle callback JUCE
+    // doesn't know about.
+    if (methodName.startsWith ("onActivity"))
+        return nullptr;
+
     return AndroidInterfaceImplementer::invoke (proxy, method, args);
 }
 
