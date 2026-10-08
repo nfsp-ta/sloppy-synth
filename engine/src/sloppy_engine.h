@@ -11,6 +11,7 @@
 #pragma once
 
 #include "JuceHeader.h"
+#include "macro_midi.h"
 #include "synth_base.h"
 
 #include <atomic>
@@ -95,18 +96,37 @@ namespace sloppy {
       // Changes whenever routings are added or removed, or a patch is loaded.
       int getModulationGeneration() const { return modulation_generation_; }
 
+      // MIDI CC assignments for the macros. Matching CCs move the macro and
+      // are not passed on to Vital, so a macro on CC 1 replaces the mod
+      // wheel rather than doubling it.
+      MacroMidiMap& getMacroMidi() { return macro_midi_; }
+
+      // Device settings (macro CC assignments) live in this JSON file. Loads
+      // it if it exists; saveSettings() writes it. With no file set, settings
+      // are kept in memory only.
+      void setSettingsFile(const File& file);
+      bool saveSettings();
+
       void allNotesOff();
       void setBpm(float bpm);
 
       double getSampleRateHz() const { return sample_rate_; }
 
     private:
+      // Moves macros for mapped CCs, and drops those CCs from `midi`.
+      void applyMacroMidi(MidiBuffer& midi);
+
       double sample_rate_ = 44100.0;
       double seconds_time_ = 0.0;
       SpinLock midi_lock_;
       MidiBuffer incoming_midi_;
       MidiBuffer pending_midi_;
       std::atomic<int> modulation_generation_ { 0 };
+      MacroMidiMap macro_midi_;
+      vital::Value* macro_controls_[MacroMidiMap::kNumMacros] = {};
+      MidiBuffer unmapped_midi_;
+      File settings_file_;
+      CriticalSection settings_lock_;
 
       JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)
   };

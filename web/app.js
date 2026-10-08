@@ -11,6 +11,7 @@ const state = {
   info: {},            // parameter name -> { label, min, max, scale, options, ... }
   patch: { index: -1, name: "", author: "", style: "" },
   macroNames: [],
+  macroMidi: { assignments: [], defaults: [], learning: 0 }, // CC per macro; learning is 1-8, or 0
   patches: [],
   modInfo: { sources: [], destinations: [] },
   modulations: [],     // { slot, source, destination }
@@ -61,6 +62,7 @@ function connect() {
     send({ type: "list_patches" });
     send({ type: "get_mod_info" });
     send({ type: "get_modulations" });
+    send({ type: "get_macro_midi" });
   });
 
   socket.addEventListener("message", (event) => {
@@ -138,6 +140,9 @@ function handleMessage(message) {
     case "modulations":
       state.modulations = message.modulations;
       if (state.view === "edit") renderEditPage({ keepScroll: true });
+      break;
+    case "macro_midi":
+      updateMacroMidi(message);
       break;
     case "error":
       toast(message.message);
@@ -351,8 +356,137 @@ function renderMacros() {
   state.layout.macros.forEach((name, i) => {
     if (!state.info[name]) return;
     const title = state.macroNames[i] || `Macro ${i + 1}`;
-    container.append(makeKnob(name, title));
+    const card = document.createElement("div");
+    card.className = "macro";
+    const chip = document.createElement("button");
+    chip.className = "cc-chip";
+    chip.dataset.macro = i + 1;
+    chip.addEventListener("click", () => openMacroMidi(i + 1));
+    card.append(makeKnob(name, title), chip);
+    container.append(card);
   });
+  updateCcChips();
+}
+
+// ---- Macro MIDI CCs -------------------------------------------------------
+// Each macro follows one MIDI CC, on one channel or any. The assignments
+// belong to the synth (the device), not to the patch.
+
+// What the MIDI spec, or Vital, already uses a CC for.
+const CC_NAMES = {
+  0: "Bank select", 1: "Mod wheel", 2: "Breath", 4: "Foot", 5: "Portamento time", 7: "Volume",
+  8: "Balance", 10: "Pan", 11: "Expression", 32: "Bank select LSB", 64: "Sustain pedal",
+  65: "Portamento", 66: "Sostenuto", 67: "Soft pedal", 71: "Resonance", 72: "Release",
+  73: "Attack", 74: "Brightness, MPE slide", 91: "Reverb send", 93: "Chorus send",
+};
+// CCs that do something in the synth when no macro takes them.
+const CC_TAKEN_OVER = { 0: "patch bank changes", 1: "the mod wheel", 32: "patch folder changes",
+  64: "the sustain pedal", 66: "the sostenuto pedal", 74: "MPE slide" };
+
+function describeAssignment(a) {
+  if (!a || a.cc < 0) return "No CC";
+  return a.channel ? `CC ${a.cc} · Ch ${a.channel}` : `CC ${a.cc}`;
+}
+
+function updateMacroMidi(message) {
+  const wasLearning = state.macroMidi.learning;
+  state.macroMidi = message;
+  updateCcChips();
+  if (wasLearning && !message.learning) {
+    const a = message.assignments[wasLearning - 1];
+    if (a && a.cc >= 0) toast(`${macroTitle(wasLearning)} now follows ${describeAssignment(a)}`);
+  }
+  if ($("macro-midi").open) fillMacroMidiDialog();
+}
+
+function macroTitle(macro) {
+  const name = state.macroNames[macro - 1];
+  return name && !/^MACRO \d$/.test(name) ? name : `Macro ${macro}`;
+}
+
+function updateCcChips() {
+  for (const chip of document.querySelectorAll(".cc-chip")) {
+    const macro = Number(chip.dataset.macro);
+    const learning = state.macroMidi.learning === macro;
+    const a = state.macroMidi.assignments[macro - 1];
+    chip.textContent = learning ? "Learning…" : a ? describeAssignment(a) : "MIDI";
+    chip.classList.toggle("learning", learning);
+    chip.classList.toggle("none", !learning && (!a || a.cc < 0));
+    chip.title = `MIDI CC for ${macroTitle(macro)}`;
+    chip.setAttribute("aria-label", `${macroTitle(macro)} MIDI: ${chip.textContent}`);
+  }
+}
+
+let editingMacro = 0;
+
+function setupMacroMidiDialog() {
+  const cc = $("mm-cc");
+  const none = document.createElement("option");
+  none.value = "-1";
+  none.textContent = "None";
+  cc.append(none);
+  for (let n = 0; n <= 119; n++) {
+    const option = document.createElement("option");
+    option.value = n;
+    option.textContent = CC_NAMES[n] ? `${n} · ${CC_NAMES[n]}` : String(n);
+    cc.append(option);
+  }
+  const channel = $("mm-channel");
+  for (let n = 0; n <= 16; n++) {
+    const option = document.createElement("option");
+    option.value = n;
+    option.textContent = n ? `Channel ${n}` : "Any channel";
+    channel.append(option);
+  }
+  const change = () => send({ type: "set_macro_midi", macro: editingMacro,
+    cc: Number(cc.value), channel: Number(channel.value) });
+  cc.addEventListener("change", change);
+  channel.addEventListener("change", change);
+  $("mm-learn").addEventListener("click", () => {
+    const learning = state.macroMidi.learning === editingMacro;
+    send({ type: "learn_macro_midi", macro: learning ? 0 : editingMacro });
+  });
+  $("mm-reset").addEventListener("click", () => send({ type: "reset_macro_midi" }));
+  $("mm-done").addEventListener("click", () => $("macro-midi").close());
+  // Learning only makes sense while the dialog is open.
+  $("macro-midi").addEventListener("close", () => {
+    if (state.macroMidi.learning) send({ type: "learn_macro_midi", macro: 0 });
+  });
+  // A tap on the backdrop closes it.
+  $("macro-midi").addEventListener("click", (event) => {
+    if (event.target === $("macro-midi")) $("macro-midi").close();
+  });
+}
+
+function openMacroMidi(macro) {
+  editingMacro = macro;
+  fillMacroMidiDialog();
+  if (!$("macro-midi").open) $("macro-midi").showModal();
+}
+
+function fillMacroMidiDialog() {
+  const macro = editingMacro;
+  const a = state.macroMidi.assignments[macro - 1] || { cc: -1, channel: 0 };
+  const learning = state.macroMidi.learning === macro;
+  $("mm-title").textContent = `${macroTitle(macro)} MIDI`;
+  $("mm-cc").value = String(a.cc);
+  $("mm-channel").value = String(a.channel);
+  const learn = $("mm-learn");
+  learn.textContent = learning ? "Cancel learn" : "Learn";
+  learn.setAttribute("aria-pressed", String(learning));
+
+  const notes = [];
+  if (learning) notes.push("Move a knob, fader or wheel on your controller.");
+  if (CC_TAKEN_OVER[a.cc] !== undefined) notes.push(`This CC goes to the macro instead of ${CC_TAKEN_OVER[a.cc]}.`);
+  const shared = state.macroMidi.assignments
+    .map((other, i) => ({ other, i }))
+    .filter(({ other, i }) => i !== macro - 1 && a.cc >= 0 && other.cc === a.cc &&
+      (!other.channel || !a.channel || other.channel === a.channel))
+    .map(({ i }) => macroTitle(i + 1));
+  if (shared.length) notes.push(`Also moves ${shared.join(", ")}.`);
+  const d = state.macroMidi.defaults[macro - 1];
+  if (d) notes.push(`Default: ${describeAssignment(d)}. These settings belong to this synth, not the patch.`);
+  $("mm-note").textContent = notes.join(" ");
 }
 
 // ---- Keyboard ------------------------------------------------------------
@@ -488,6 +622,7 @@ function setupKeyboard() {
   window.addEventListener("keydown", (event) => {
     if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.target.matches("input, select, textarea")) return;
+    if ($("macro-midi").open) return;
     if (event.code === "KeyZ" || event.code === "KeyX") {
       $(event.code === "KeyZ" ? "octave-down" : "octave-up").click();
       return;
@@ -1187,6 +1322,7 @@ async function main() {
   $("next-patch").addEventListener("click", () => stepPatch(1));
   $("patch-search").addEventListener("input", renderPatchList);
   setupAndroid();
+  setupMacroMidiDialog();
 
   try {
     state.page = localStorage.getItem("sloppy.page");

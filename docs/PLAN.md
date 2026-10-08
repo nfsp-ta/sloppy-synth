@@ -5,27 +5,113 @@ then Android so old phones become synths. A new UI built for small screens:
 phones, tablets, and tiny non-touch screens driven by rotary encoders. Vital
 patches and banks must keep working.
 
-## 1. Where things stand
+This file describes what comes next in detail and what is done only briefly.
+The history of each change is in the squashed commits on `main`.
 
-Done in the first PR:
+## Where we are now
 
-- Upstream Vital imported under `vital/` with as few changes as possible, so
-  upstream fixes stay easy to compare and port.
-- `sloppy_engine`: Vital's synthesis engine and patch layer built against
-  JUCE's non-GUI modules only. No X11, OpenGL, curl or display.
-- `sloppy::Engine`: one object for hosts to drive (prepare, process a block
-  with MIDI, load or save a patch, get or set parameters by Vital's names).
-  Real-time safe in the sense that a patch load on another thread never
-  blocks the audio callback; the callback outputs silence for that block.
-- `sloppy::PatchLibrary`: `.vitalbank` import (unzips the way Vital does,
-  rejects paths that escape the library), patch listing by bank and folder.
-- `sloppy-synth`: headless ALSA player with MIDI input, a virtual MIDI port,
-  program-change patch switching and hot-plugged controllers.
-- `sloppy-render`: patch to WAV, doubling as a speed benchmark.
-- Cross builds for aarch64 and armhf, tested under qemu. ARM output matches
-  x86 to within 0.2% (float rounding between NEON and SSE).
+The engine, the Linux host, the web UI and the Android app all have a first
+working version. The Android app runs on real phones and tablets; the engine
+has not been measured on old phones or a Raspberry Pi yet. While that
+hardware is being found, next up is work that needs none: the web UI,
+patches and banks, and the Android app.
 
-## 2. Architecture
+## Next steps
+
+Roughly in order. Each step is meant to be about one pull request. Steps 1
+to 3 need no new hardware; step 4 onwards waits on old phones and a
+Pi Zero 2 W, Pi 3 or newer.
+
+### 1. Web UI
+
+- Envelope and LFO shape views.
+- Oscilloscope and output level, streamed over the control protocol at a
+  low frame rate.
+- Bank upload from the browser (the Android app already imports through
+  its own Import button).
+- Themes: a few built-in ones plus user-made themes. All colours are
+  already CSS variables at the top of `web/style.css`, so a theme can be a
+  file of those variables that is picked, imported and shared from the UI.
+
+### 2. Patches and banks
+
+- Browse by Vital's style tag; favourites.
+- Import `.vitaltable` wavetables, `.vitallfo` shapes and samples into
+  patches from the UI.
+- Tuning files (`.scl`, `.tun`), already supported by the engine.
+- Check against a set of real-world patches (Ashley's own, or freely
+  licensed community banks). Vital's factory presets can't be bundled.
+
+### 3. Android
+
+- Bluetooth MIDI pairing from the app.
+- An option to let other devices on the network edit the phone's synth
+  (the web UI is served on `127.0.0.1` only today).
+- A release signing key, then F-Droid and Google Play (GPLv3 is fine on
+  both).
+
+### 4. Measure on real ARM hardware
+
+Nobody knows yet how many voices a phone or a Pi can play. Measured on an
+x86 server core (2.1 GHz Xeon, SSE2): the init patch renders 8 voices at
+about 20x real time, and a test patch with 4-voice unison, two oscillators
+and effects at about 6.5x. A Pi 3's Cortex-A53 at 1.2 GHz is likely around
+ten times slower, so light patches should play with a handful of voices and
+heavy factory patches may not keep up.
+
+- Android: a benchmark that runs on the device (in the app, or
+  `sloppy-render` built with the NDK and run over `adb`), reporting "x real
+  time" for a small set of reference patches and voice counts. This part
+  can be built early and tried on the Pixel 10a and Galaxy Tab A9+ while
+  the old phones are found.
+- Raspberry Pi: needs a Pi Zero 2 W, Pi 3 or newer. A Pi 1 can't run the
+  engine at all (ARMv6, no NEON). On the board:
+
+  ```sh
+  ./sloppy-render patch.vital -n C3,E3,G3,B3 -l 5 -o /tmp/x.wav   # look at "x real time"
+  ```
+
+- Write the results down here so later work can be judged against them.
+
+### 5. Per-device limits
+
+Applied when a patch loads, so patches still load, just thinner: cap
+polyphony and unison voices, force oversampling to 1x. Defaults per device
+class picked from step 4's numbers, adjustable in the UI. Shared by the
+Linux and Android hosts.
+
+### 6. Raspberry Pi host
+
+- Real-time setup: `SCHED_FIFO` audio thread, `performance` CPU governor,
+  ALSA period sizes of 128 to 256 samples, no desktop running.
+- A systemd service so the Pi boots straight into the synth.
+- Use 64-bit Raspberry Pi OS. AArch64 NEON has a real vector divide and
+  more registers; 32-bit needs a slower reciprocal path.
+
+### 7. Encoder and small-screen UI
+
+A separate client of the control protocol for hardware builds: a 128x64
+OLED or 320x240 SPI screen, 4 to 8 rotary encoders with push buttons (read
+through `libgpiod`), and a page/menu layout: Oscillators, Filters,
+Envelopes, LFOs, Effects, Macros, Patch browser. Each page shows four to
+eight parameters mapped to the encoders, taken from `web/layout.json` so it
+stays consistent with the web UI. The eight macros get a permanent spot,
+since most Vital patches route their key controls through them.
+
+### 8. Performance work
+
+- Spread voices over several cores. Vital processes voices in one thread;
+  splitting the voice handler across worker threads is the biggest possible
+  gain but also the most invasive engine change.
+- Profile the hot paths on the A53 (oscillator, filter, reverb) for
+  NEON-specific improvements.
+- Longer term, shrink the engine's JUCE use to what it really needs (zip,
+  WAV, FFT, strings, files) to make Android and embedded builds lighter.
+
+A Pi 4 or 5 is two to five times faster than a Pi 3 and is a safe fallback
+target if the Pi 3 can't keep up.
+
+## Architecture
 
 ```
                +-------------------------------+
@@ -38,7 +124,7 @@ Done in the first PR:
  +--------+---------+                      +---------+---------+
  | Linux host       |                      | Android host      |
  | sloppy-synth     |                      | NDK lib + Oboe    |
- | ALSA/JACK + MIDI |                      | + Android MIDI    |
+ | ALSA + MIDI      |                      | + Android MIDI    |
  +--------+---------+                      +---------+---------+
           |              control protocol            |
           |   (parameters, patches, meters, scope)   |
@@ -50,150 +136,56 @@ Done in the first PR:
   tablet, browser)       screen UI on the Pi     MIDI controller maps
 ```
 
-The key decision: every UI is a client of one control protocol rather than
-being linked into the engine. Then one UI codebase can serve a phone, a
-tablet and a Pi, and the Pi can be played and edited from a phone over Wi-Fi.
-
-Control protocol (proposal): JSON messages over a WebSocket, served by the
-host process, for parameter get/set/subscribe, patch browse/load/save, bank
-import, and a few streamed visuals (output level, oscilloscope, LFO and
-envelope positions) at a low frame rate. Parameter names are Vital's own
+Every UI is a client of one control protocol (JSON over a WebSocket, see
+`docs/PROTOCOL.md`) rather than being linked into the engine. One UI
+codebase serves a phone, a tablet and a Pi, and a Pi can be played and
+edited from a phone over Wi-Fi. Parameter names are Vital's own
 (`filter_1_cutoff` etc.), which are also the keys in `.vital` files.
 
-## 3. Raspberry Pi 3: performance is the main risk
+Decisions so far:
 
-Vital is heavy. The engine is single-threaded and the Pi 3's Cortex-A53 at
-1.2 GHz is far slower than a desktop core. Measured on an x86 server core
-(2.1 GHz Xeon, SSE2): the init patch renders 8 voices at about 20x real
-time, and a test patch with 4-voice unison, two oscillators and effects at
-about 6.5x. A Pi 3 core will likely be around ten times slower, so light
-patches should play with a handful of voices and heavy factory patches may
-not keep up. This needs measuring on the real board first:
+- UI: a web UI served by the synth itself, also shown in the Android app's
+  WebView (Ashley, 2026-10-07). Native per-platform UIs and a reworked
+  JUCE UI were turned down: two UIs to keep in sync, or OpenGL and a large
+  desktop window that a Pi 3 can't drive.
+- Look: a neutral, slightly blue-gray dark theme, not Vital's purple
+  (Ashley, 2026-10-07).
+- Android: a small Kotlin app with the engine as an NDK library, rather
+  than a full JUCE Android app.
+- Macros: eight instead of Vital's four (Ashley, 2026-10-08). Macros 5 to 8
+  are saved under Vital's own key names (`macro_control_5`, `macro5`...),
+  which Vital skips when it opens the patch, so Vital patches load and
+  save as before.
+- MIDI: rather than MIDI learn on every control, only the macros follow
+  MIDI CCs (Ashley, 2026-10-08). Defaults are CC 21 to 28 on any channel:
+  undefined in the MIDI spec, clear of the CCs Vital reacts to (mod wheel,
+  pedals, MPE slide, bank select), and what many small controllers' knobs
+  send. The CC and channel per macro belong to the device, not the patch,
+  and are kept in a settings file next to the library.
+- Scope: a straight Vital port. Microcontroller synths (Pico, FM-1) can't
+  hold Vital's engine and belong in separate projects.
 
-```sh
-./sloppy-render patch.vital -n C3,E3,G3,B3 -l 5 -o /tmp/x.wav   # look at "x real time"
-```
+## Done
 
-Levers, roughly in order of payoff:
+- Upstream Vital imported under `vital/` with as few changes as possible
+  (edits marked `sloppy-synth:`), so upstream fixes stay easy to port.
+- Headless engine (`sloppy_engine`, `sloppy::Engine`) built against JUCE's
+  non-GUI modules only, with real-time-safe patch loading.
+- `.vital` load and save, `.vitalbank` import, patch library by bank and
+  folder.
+- Linux host `sloppy-synth`: ALSA audio, MIDI with hot-plug and program
+  change, and the control server. `sloppy-render` renders patches to WAV
+  and doubles as a benchmark.
+- Cross builds for aarch64 and armhf, tested under qemu in CI.
+- Web UI: play page with macros and a multi-touch keyboard, patch browser,
+  parameter pages from `web/layout.json`, and modulation routing.
+- Eight macros, each on a MIDI CC and channel set from the web UI (with
+  MIDI learn), saved per device.
+- Android app: engine over NDK, Oboe audio, USB and virtual MIDI, web UI in
+  a WebView, background service, patch and bank import. CI builds the APK
+  and smoke-tests it on two emulator API levels.
 
-1. Use 64-bit Raspberry Pi OS. AArch64 NEON has a real vector divide and
-   more registers; 32-bit needs a slower reciprocal path.
-2. Per-device limits applied at load time: cap polyphony and unison voices,
-   force oversampling to 1x. Patches still load, just thinner.
-3. Real-time setup: `SCHED_FIFO` audio thread, `performance` CPU governor,
-   ALSA period sizes of 128 to 256 samples, no desktop running.
-4. Spread voices over the Pi's four cores. Vital processes voices in one
-   thread; splitting the voice handler across worker threads is the biggest
-   possible gain but also the most invasive engine change.
-5. Profile the hot paths on the A53 (oscillator, filter, reverb) for
-   NEON-specific improvements.
-
-A Pi 4 or 5 is two to five times faster than a Pi 3 and would be a safe
-fallback target.
-
-## 4. Android
-
-Built this way in `android/` (see the README). The notes below were the
-plan.
-
-Recommended approach: a small Kotlin app with the engine as an NDK library.
-
-- Audio via Oboe (low-latency AAudio on Android 8.1+, OpenSL ES below),
-  calling `Engine::process` from the Oboe callback. JUCE's audio device
-  layer isn't needed on Android.
-- MIDI via `android.media.midi` (USB and Bluetooth MIDI, Android 6+).
-- UI: a WebView showing the same web UI, talking to the engine through a
-  local WebSocket or a JS bridge.
-- ABIs: `arm64-v8a` and `armeabi-v7a`, `minSdk` 23 (Android 6) to reach old
-  phones while still having the MIDI API.
-- The CMake build already handles `ANDROID` and `armeabi-v7a`; the work is
-  the Gradle project, JNI glue, and checking that the JUCE core pieces the
-  engine uses (files, strings, threads) behave without a JUCE app shell.
-
-Alternative: a full JUCE Android app. Less glue code, but it pulls JUCE's
-Android app framework in and makes a web-based UI awkward. Not recommended
-unless we pick a JUCE UI.
-
-Longer term, shrinking the engine's JUCE use to what it really needs (zip,
-WAV, FFT, strings, files) would make Android and embedded builds lighter.
-
-Distribution: GPLv3 apps are fine on Google Play and F-Droid (unlike the iOS
-App Store, which upstream rules out).
-
-## 5. UI options (decision needed)
-
-All of these talk to the engine through the control protocol above.
-
-Decided: **A, the web UI** (Ashley, 2026-10-07). A first version is in
-`web/`: play page with macros and a multi-touch keyboard, patch browser, and
-edit pages driven by `web/layout.json`.
-
-Look: a neutral, slightly blue-gray dark theme rather than Vital's purple
-(Ashley, 2026-10-07). All colours are CSS variables at the top of
-`web/style.css`. Future work: several built-in themes and user-made themes
-(for example a theme file of those variables that can be picked, imported
-and shared from the UI).
-
-**A. Web UI (recommended).** HTML/JS served by the synth itself. One
-codebase covers phone portrait, tablet landscape and desktop with a
-responsive layout; works in Android's WebView; lets a phone edit a Pi over
-the network. Pi 3 never has to draw it. Cost: an HTTP/WebSocket server in
-the host, and a frontend stack to pick (a small framework such as Svelte or
-Preact, built ahead of time so the synth just serves static files).
-
-**B. Native UIs per platform.** Jetpack Compose on Android, something else
-on Linux. Best native feel on Android, but two UIs to build and keep in sync,
-and no phone-edits-the-Pi for free.
-
-**C. Rework Vital's JUCE UI for small screens.** Reuses the most existing
-code, but Vital's UI depends on OpenGL and is designed around a large
-desktop window; a Pi 3 can't drive it well and it doesn't map to encoders.
-Not recommended.
-
-**Encoder and tiny-screen UI (any of the above).** A separate client for
-hardware builds: a 128x64 OLED or 320x240 SPI screen, 4 to 8 rotary encoders
-with push buttons (read through `libgpiod`), and a page/menu layout:
-Oscillators, Filters, Envelopes, LFOs, Effects, Macros, Patch browser. Each
-page shows four to eight parameters mapped to the encoders. The page layout
-lives in one JSON file that the web UI's compact "performance" view reuses,
-so both stay consistent. Macros 1 to 4 deserve a permanent spot, since most
-Vital patches route their key controls through them.
-
-## 6. Patches and banks
-
-Done: `.vital` load and save (including Vital's upgrade path for older
-patches; patches from a newer major/minor Vital are refused just like Vital
-does), `.vitalbank` import, library listing.
-
-Next:
-
-- Browse by bank, folder and Vital's style tag; favourites.
-- Import `.vitaltable` wavetables, `.vitallfo` shapes and samples into
-  patches from the UI.
-- Tuning files (`.scl`, `.tun`), already supported by the engine.
-- Check against a set of real-world patches (Ashley's own, or freely
-  licensed community banks). Vital's factory presets can't be bundled.
-
-## 7. Milestones
-
-1. Headless engine on ARM Linux, patch and bank import. *(this PR)*
-2. Measure on a Pi 3; per-device voice and unison limits; real-time tuning;
-   a systemd service so the Pi boots straight into the synth.
-3. Control protocol and server in `sloppy-synth`. *(done, docs/PROTOCOL.md)*
-4. First web UI: patch browser, macros, a performance page, parameter
-   pages. *(first version done)* Modulation routing: a Mod page with every
-   routing, and a "Modulates" list on each envelope, LFO and random page.
-   *(done)* Next: envelope and LFO
-   shape views, oscilloscope, bank upload from the browser, themes
-   (built-in and user-made).
-5. Encoder/small-screen UI on the Pi.
-6. Android app: NDK engine, Oboe, MIDI, WebView UI. *(first version in
-   `android/`)* Next: measure on real old phones; per-device voice limits;
-   Bluetooth MIDI pairing; an option to let other devices on the network
-   edit the phone's synth; a release signing key.
-7. Performance work: multi-core voices, NEON tuning.
-
-## 8. Rules from upstream
+## Rules from upstream
 
 From Vital's README, binding on this fork: GPLv3; no "Vital", "Vital Audio",
 "Tytel" or "Matt Tytel" in product names or marketing; no connections to

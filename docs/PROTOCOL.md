@@ -24,11 +24,15 @@ parameter's `min`..`max` range.
 | `get_modulations` | | `modulations` |
 | `add_modulation` | `source`, `destination`, `amount` (-1 to 1, default 0.5) | none on success (everyone gets `modulations`), else `error`. An existing routing only gets the new amount. |
 | `remove_modulation` | `source`, `destination` | none on success (everyone gets `modulations`), else `error` |
+| `get_macro_midi` | | `macro_midi` |
+| `set_macro_midi` | `macro` (1-8), `cc` (0-119, or -1 for none), `channel` (1-16, or 0 for any); either may be left out to keep it | none on success (everyone gets `macro_midi`), else `error` |
+| `learn_macro_midi` | `macro` (1-8; 0 or left out cancels) | none (everyone gets `macro_midi`). The next CC received is assigned to that macro. |
+| `reset_macro_midi` | | none (everyone gets `macro_midi`). Every macro back on its default CC. |
 
 ## Synth to client
 
 - `state`: `patch` (`index`, `name`, `author`, `style`, `comments`),
-  `macros` (four macro names), `values` (every parameter). Sent on `hello`
+  `macros` (eight macro names), `values` (every parameter). Sent on `hello`
   and to every client whenever a different patch is loaded.
 - `params`: `values`, only the parameters that changed. Sent to every client
   about 25 times a second while anything is changing, whether the change came
@@ -50,6 +54,13 @@ parameter's `min`..`max` range.
   named after its slot, changed with `set` and reported in `params`:
   `modulation_<slot>_amount` (-1 to 1), `_bipolar`, `_stereo`, `_bypass` and
   `_power`.
+- `macro_midi`: `assignments` and `defaults`, each a list of eight
+  `{ cc, channel }` (macro 1 first; `cc` -1 means none, `channel` 0 means
+  any), and `learning` (the macro waiting for a CC, or 0). Sent to every
+  client when an assignment changes, including when a MIDI learn
+  completes. Assignments belong to the device, not the patch: hosts save
+  them to a settings file. A CC assigned to a macro moves only the macro;
+  it no longer reaches Vital (so a macro on CC 1 replaces the mod wheel).
 - `error`: `message`.
 
 ## Security
@@ -57,4 +68,5 @@ parameter's `min`..`max` range.
 There is no authentication: anyone who can reach the port can play and edit
 the synth. That suits a synth on a home network; use `--http-bind 127.0.0.1`
 to keep it local, or `--no-web` to turn it off. The server only serves files
-from the web folder, and never writes files.
+from the web folder, and the only file it writes is the device settings
+file (macro CC assignments).

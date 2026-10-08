@@ -143,27 +143,34 @@ main {
 /* ---- Play ------------------------------------------------------------- */
 .macros {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  padding: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px;
   flex: 1;
   min-height: 0;
   align-content: center;
 }
 
+.macro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 4px 6px;
+  background: var(--panel);
+  border-radius: var(--radius);
+}
 .knob {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 10px 6px;
-  background: var(--panel);
-  border-radius: var(--radius);
+  gap: 2px;
+  width: 100%;
   touch-action: none;
   user-select: none;
   cursor: ns-resize;
 }
-.knob svg { width: min(28vw, 120px); height: auto; }
+.knob svg { width: min(18vw, 110px); height: auto; }
 .knob .track { stroke: var(--panel-2); }
 .knob .fill { stroke: var(--accent); }
 .knob .dot { fill: var(--text); }
@@ -176,6 +183,45 @@ main {
   white-space: nowrap;
 }
 .knob-value { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* The macro's MIDI CC; tap to change it. */
+.cc-chip {
+  margin-top: 4px;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-chip:hover { color: var(--text); border-color: var(--muted); }
+.cc-chip.none { border-style: dashed; }
+.cc-chip.learning { color: #14161b; background: var(--accent-2); border-color: var(--accent-2); animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }
+
+/* Bottom sheet on phones, centered dialog on wider screens. */
+.sheet {
+  width: min(420px, calc(100% - 24px));
+  margin: auto auto calc(12px + env(safe-area-inset-bottom));
+  padding: 16px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.sheet::backdrop { background: rgba(0, 0, 0, 0.55); }
+.sheet h2 { margin: 0 0 12px; font-size: 17px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.sheet-note { min-height: 2.7em; margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
+.sheet-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.sheet-buttons .primary { margin-left: auto; background: var(--accent); color: #14161b; font-weight: 600; }
+#mm-learn[aria-pressed="true"] { background: var(--accent-2); color: #14161b; }
 
 .play-controls {
   display: flex;
@@ -592,12 +638,19 @@ select {
   }
   .tabs button { flex: none; padding: 0 28px; height: 44px; }
   .tabs button[aria-selected="true"] { box-shadow: inset 0 -2px 0 var(--accent); }
-  .macros { grid-template-columns: repeat(4, 1fr); max-width: 900px; margin: 0 auto; width: 100%; }
-  .knob svg { width: min(16vw, 130px); }
+  .macros { max-width: 900px; margin: 0 auto; width: 100%; gap: 10px; padding: 12px; }
+  .knob svg { width: min(15vw, 120px); }
+  .sheet { margin: auto; }
   .controls { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .patch-list > * { max-width: 760px; margin-left: auto; margin-right: auto; }
   .view[data-view="patches"] .patch-tools { width: min(760px, calc(100% - 24px)); align-self: center; }
   .toast { bottom: 24px; }
+}
+
+/* Room for all eight macros in one row. */
+@media (min-width: 1100px) {
+  .macros { grid-template-columns: repeat(8, 1fr); max-width: 1500px; }
+  .knob svg { width: min(9vw, 120px); }
 }
 
 @media (min-width: 700px) and (orientation: landscape) {
@@ -606,9 +659,14 @@ select {
 
 /* Phones held sideways: keyboard first, macros in one row. */
 @media (max-height: 500px) and (orientation: landscape) {
-  .macros { grid-template-columns: repeat(4, 1fr); padding: 6px 12px; }
-  .knob { padding: 4px; }
-  .knob svg { width: min(11vw, 70px); }
-  .keyboard { height: 45vh; }
+  .macros { grid-template-columns: repeat(8, 1fr); padding: 4px 12px; gap: 6px; flex: none; }
+  .macro { padding: 3px 2px; }
+  .knob svg { width: min(6vw, 40px); }
+  .knob-label { font-size: 11px; }
+  .knob-value { display: none; }
+  .cc-chip { min-height: 22px; margin-top: 2px; font-size: 10px; }
+  .play-controls { padding: 2px 12px; }
+  .pill { min-height: 32px; }
+  .keyboard { flex: 1; min-height: 120px; height: auto; }
   .tabs button { height: 40px; }
 }

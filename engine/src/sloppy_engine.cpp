@@ -19,6 +19,8 @@ namespace sloppy {
   size_t valueNameCount(const std::string* lookup);
 
   Engine::Engine() {
+    for (int i = 0; i < MacroMidiMap::kNumMacros; ++i)
+      macro_controls_[i] = controls_["macro_control_" + std::to_string(i + 1)];
     loadInitPatch();
     prepare(sample_rate_, vital::kMaxBufferSize);
   }
@@ -33,6 +35,7 @@ namespace sloppy {
     midi_manager_->setSampleRate(sample_rate);
     incoming_midi_.ensureSize(4096);
     pending_midi_.ensureSize(4096);
+    unmapped_midi_.ensureSize(4096);
     ignoreUnused(max_block_size);
   }
 
@@ -57,6 +60,7 @@ namespace sloppy {
       pending_midi_.clear();
     }
 
+    applyMacroMidi(midi);
     processModulationChanges();
     processKeyboardEvents(midi, total_samples);
 
@@ -76,6 +80,67 @@ namespace sloppy {
       for (int channel = 2; channel < buffer.getNumChannels(); ++channel)
         buffer.clear(channel, 0, total_samples);
     }
+  }
+
+  void Engine::applyMacroMidi(MidiBuffer& midi) {
+    bool mapped = false;
+    for (const MidiMessageMetadata event : midi) {
+      const uint8* data = event.data;
+      if (event.numBytes < 3 || (data[0] & 0xf0) != 0xb0)
+        continue;
+      int channel = (data[0] & 0x0f) + 1;
+      int macro = macro_midi_.match(channel, data[1]);
+      for (; macro >= 0; macro = macro_midi_.match(channel, data[1], macro + 1)) {
+        macro_controls_[macro]->set(data[2] / 127.0f);
+        mapped = true;
+      }
+    }
+    if (!mapped)
+      return;
+
+    unmapped_midi_.clear();
+    for (const MidiMessageMetadata event : midi) {
+      const uint8* data = event.data;
+      bool controller = event.numBytes >= 3 && (data[0] & 0xf0) == 0xb0;
+      if (!controller || macro_midi_.match((data[0] & 0x0f) + 1, data[1]) < 0)
+        unmapped_midi_.addEvent(data, event.numBytes, event.samplePosition);
+    }
+    midi.swapWith(unmapped_midi_);
+  }
+
+  void Engine::setSettingsFile(const File& file) {
+    const ScopedLock lock(settings_lock_);
+    settings_file_ = file;
+    if (!file.existsAsFile())
+      return;
+    try {
+      json settings = json::parse(file.loadFileAsString().toStdString());
+      std::string error;
+      if (settings.count("macro_midi") && !macro_midi_.fromJson(settings["macro_midi"].dump(), error))
+        DBG("Ignoring settings: " + error);
+    }
+    catch (const json::exception&) {
+      DBG("Settings file is corrupted, using defaults.");
+    }
+  }
+
+  bool Engine::saveSettings() {
+    const ScopedLock lock(settings_lock_);
+    if (settings_file_ == File())
+      return true;
+    json settings = json::object();
+    if (settings_file_.existsAsFile()) {
+      // Keep whatever else is in there.
+      try {
+        settings = json::parse(settings_file_.loadFileAsString().toStdString());
+        if (!settings.is_object())
+          settings = json::object();
+      }
+      catch (const json::exception&) { }
+    }
+    settings["macro_midi"] = json::parse(macro_midi_.toJson());
+    settings_file_.getParentDirectory().createDirectory();
+    return settings_file_.replaceWithText(String(settings.dump(2)) + "\n");
   }
 
   bool Engine::loadPatch(const File& file, std::string& error) {

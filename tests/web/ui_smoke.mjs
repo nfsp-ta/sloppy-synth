@@ -19,6 +19,26 @@ async function page(viewport, name, actions, hasTouch = true) {
 }
 await page({ width: 390, height: 844 }, 'phone', async (p) => {
   await p.screenshot({ path: `${out}/phone-play.png` });
+  // Eight macros, each with its MIDI CC; change macro 3's CC and channel.
+  console.log('macros:', await p.locator('.macro').count(), '| chips:',
+    (await p.locator('.cc-chip').allTextContents()).join(', '));
+  await p.locator('.cc-chip').nth(2).click();
+  await p.waitForSelector('#macro-midi[open]');
+  await p.selectOption('#mm-cc', '1');
+  await p.selectOption('#mm-channel', '2');
+  await p.waitForFunction(() => document.querySelectorAll('.cc-chip')[2].textContent === 'CC 1 · Ch 2');
+  console.log('macro 3 chip:', await p.locator('.cc-chip').nth(2).textContent(), '| note:', await p.textContent('#mm-note'));
+  await p.click('#mm-learn');
+  await p.waitForSelector('.cc-chip.learning');
+  console.log('learning chip:', await p.locator('.cc-chip.learning').textContent());
+  await p.screenshot({ path: `${out}/phone-macro-midi.png` });
+  await p.click('#mm-done');
+  await p.waitForFunction(() => !document.querySelector('.cc-chip.learning'));
+  await p.locator('.cc-chip').nth(2).click();
+  await p.click('#mm-reset');
+  await p.waitForFunction(() => document.querySelectorAll('.cc-chip')[2].textContent === 'CC 23');
+  console.log('after reset:', await p.locator('.cc-chip').nth(2).textContent());
+  await p.click('#mm-done');
   // play a note via keyboard tap
   const key = p.locator('.key.white').nth(2);
   const box = await key.boundingBox();
@@ -64,6 +84,9 @@ await page({ width: 390, height: 844 }, 'phone', async (p) => {
   await p.locator('.routes button[aria-label^="Remove"]').click();
   await p.waitForSelector('.routes-empty');
   console.log('after remove:', await p.locator('.routes-empty').textContent());
+});
+await page({ width: 844, height: 390 }, 'phone-landscape', async (p) => {
+  await p.screenshot({ path: `${out}/phone-landscape-play.png` });
 });
 await page({ width: 1180, height: 820 }, 'tablet', async (p) => {
   await p.waitForTimeout(300);
