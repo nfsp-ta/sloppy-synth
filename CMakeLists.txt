@@ -33,7 +33,9 @@ set(SLOPPY_ARCH_FLAGS "")
 set(SLOPPY_ARCH_DEFINES "")
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _proc)
 if(ANDROID)
-  # The Android NDK picks the ABI flags itself.
+  # The Android NDK picks the ABI flags itself. JUCE can't detect Android on
+  # its own (it would take it for Linux), so it has to be told.
+  list(APPEND SLOPPY_ARCH_DEFINES JUCE_ANDROID=1)
   if(ANDROID_ABI STREQUAL "armeabi-v7a")
     list(APPEND SLOPPY_ARCH_DEFINES NEON_ARM32=1 _FILE_OFFSET_BITS=64)
   endif()
@@ -148,8 +150,11 @@ endif()
 # sloppy-render: load a .vital patch and render notes to a WAV file.
 # Works everywhere, needs no audio hardware; used for tests and CI.
 # ---------------------------------------------------------------------------
-add_executable(sloppy-render apps/sloppy-render/main.cpp)
-target_link_libraries(sloppy-render PRIVATE sloppy_engine)
+# Not on Android, where the app is the only program.
+if(NOT ANDROID)
+  add_executable(sloppy-render apps/sloppy-render/main.cpp)
+  target_link_libraries(sloppy-render PRIVATE sloppy_engine)
+endif()
 
 # ---------------------------------------------------------------------------
 # sloppy-synth: real-time player. Loads a patch or bank and plays it from
@@ -173,7 +178,9 @@ if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
-install(TARGETS sloppy-render RUNTIME DESTINATION bin)
+if(NOT ANDROID)
+  install(TARGETS sloppy-render RUNTIME DESTINATION bin)
+endif()
 if(SLOPPY_WITH_AUDIO_DEVICES)
   install(TARGETS sloppy-synth RUNTIME DESTINATION bin)
   install(DIRECTORY web/ DESTINATION share/sloppy-synth/web)

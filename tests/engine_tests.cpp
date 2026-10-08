@@ -282,6 +282,91 @@ namespace {
     CHECK(!engine.removeModulation("macro_control_1", "osc_1_level"));
   }
 
+  // Builds a zip from (path in zip, file) pairs.
+  File makeZip(const File& folder, const String& name, const std::vector<std::pair<String, File>>& entries) {
+    ZipFile::Builder builder;
+    for (const auto& entry : entries)
+      builder.addFile(entry.second, 9, entry.first);
+    File zip_file = folder.getChildFile(name);
+    zip_file.getParentDirectory().createDirectory();
+    FileOutputStream output(zip_file);
+    builder.writeToStream(output, nullptr);
+    return zip_file;
+  }
+
+  void testZipImport() {
+    TemporaryFile temp_dir;
+    File work = temp_dir.getFile();
+    File readme = work.getChildFile("readme.txt");
+    work.createDirectory();
+    readme.replaceWithText("not a patch");
+    std::string summary, error;
+
+    // Loose presets in a wrapping folder, with macOS clutter and a text file.
+    {
+      sloppy::PatchLibrary library(work.getChildFile("lib1"));
+      File zip = makeZip(work, "loose.zip", {
+        { "My Stuff/test_bass.vital", fixture("test_bass.vital") },
+        { "My Stuff/Leads/Old.vital", fixture("test_bass_v1_0.vital") },
+        { "__MACOSX/My Stuff/._test_bass.vital", readme },
+        { "My Stuff/readme.txt", readme },
+      });
+      CHECK(library.importZip(zip, "Cool Presets.zip", summary, error));
+      CHECK(summary == "Imported 2 presets");
+      std::vector<sloppy::PatchEntry> patches = library.listPatches();
+      CHECK(patches.size() == 2);
+      for (const sloppy::PatchEntry& patch : patches) {
+        CHECK(patch.bank == "Cool Presets");
+        sloppy::Engine engine;
+        std::string load_error;
+        CHECK(engine.loadPatch(patch.file, load_error));
+      }
+      CHECK(patches.size() == 2 && patches[1].folders == std::vector<std::string>({ "Leads" }));
+    }
+
+    // Banks inside a zip.
+    {
+      sloppy::PatchLibrary library(work.getChildFile("lib2"));
+      File zip = makeZip(work, "banks.zip", { { "Downloads/Test Bank.vitalbank", fixture("Test Bank.vitalbank") } });
+      CHECK(library.importZip(zip, "banks.zip", summary, error));
+      CHECK(summary == "Imported 1 bank");
+      std::vector<sloppy::PatchEntry> patches = library.listPatches();
+      CHECK(patches.size() == 3);
+      CHECK(!patches.empty() && patches[0].bank == "Test Bank");
+    }
+
+    // A zip laid out like a bank.
+    {
+      sloppy::PatchLibrary library(work.getChildFile("lib3"));
+      File zip = makeZip(work, "laidout.zip", { { "Zipped Bank/Presets/Bass/Sub.vital", fixture("test_bass.vital") } });
+      CHECK(library.importZip(zip, "laidout.zip", summary, error));
+      CHECK(summary == "Imported 1 bank");
+      std::vector<sloppy::PatchEntry> patches = library.listPatches();
+      CHECK(patches.size() == 1);
+      CHECK(!patches.empty() && patches[0].bank == "Zipped Bank" && patches[0].category == "Bass");
+    }
+
+    // Nothing Vital in it, and not a zip at all.
+    {
+      sloppy::PatchLibrary library(work.getChildFile("lib4"));
+      File zip = makeZip(work, "other.zip", { { "readme.txt", readme } });
+      CHECK(!library.importZip(zip, "other.zip", summary, error));
+      CHECK(!error.empty());
+      CHECK(!library.importZip(readme, "readme.zip", summary, error));
+      CHECK(library.listPatches().empty());
+    }
+
+    // Paths escaping the library are refused, like in banks.
+    {
+      sloppy::PatchLibrary library(work.getChildFile("lib5"));
+      File zip = makeZip(work, "slip.zip", { { "../escaped.vital", fixture("test_bass.vital") } });
+      CHECK(!library.importZip(zip, "slip.zip", summary, error));
+      CHECK(!work.getChildFile("escaped.vital").exists());
+    }
+
+    work.deleteRecursively();
+  }
+
   void testBankImportRejectsZipSlip() {
     TemporaryFile temp_dir;
     File root = temp_dir.getFile().getChildFile("library");
@@ -312,6 +397,7 @@ int main() {
     { "nested patch folders", testNestedFolders },
     { "modulation matrix", testModulationMatrix },
     { "bank import rejects zip slip", testBankImportRejectsZipSlip },
+    { "zip import", testZipImport },
   };
 
   for (const Test& test : tests) {
