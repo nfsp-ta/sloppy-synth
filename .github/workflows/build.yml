@@ -95,11 +95,22 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run on an emulator
+      - name: Run on an Android 10 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
           arch: x86_64
           target: default
+          disable-animations: true
+          script: sh .github/scripts/android-smoke.sh sloppy-synth-android.apk
+
+      - name: Run on an Android 16 emulator
+        # Runs even if the older emulator failed, to see both results.
+        if: success() || failure()
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
           disable-animations: true
           script: sh .github/scripts/android-smoke.sh sloppy-synth-android.apk

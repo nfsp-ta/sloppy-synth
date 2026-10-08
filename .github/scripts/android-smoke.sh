@@ -49,18 +49,30 @@ fi
 echo "Control socket accepts WebSocket connections."
 
 # Rotating the screen must not take the app down: turn to landscape and
-# back, then check the app and its server are still there.
+# back, then change the font size, which makes Android rebuild the screen
+# (the same path some versions take on rotation). Then check the app and its
+# server are still there.
+check_alive() {
+  if ! adb shell pidof "$package" > /dev/null; then
+    echo "The app died after $1."
+    echo "--- crash log"
+    adb logcat -d -b crash || true
+    adb logcat -d -s sloppy-synth:* AndroidRuntime:* DEBUG:* libc:* || true
+    exit 1
+  fi
+  curl -sSf http://127.0.0.1:18080/ > /dev/null
+  echo "Survived $1."
+}
+
 adb shell settings put system accelerometer_rotation 0
 for rotation in 1 0 3 0; do
   adb shell settings put system user_rotation "$rotation"
   sleep 3
 done
-if ! adb shell pidof "$package" > /dev/null; then
-  echo "The app died when the screen rotated."
-  echo "--- crash log"
-  adb logcat -d -b crash || true
-  adb logcat -d -s sloppy-synth:* AndroidRuntime:E DEBUG:* chromium:* cr_*:* libc:* || true
-  exit 1
-fi
-curl -sSf http://127.0.0.1:18080/ > /dev/null
-echo "Survived rotating the screen."
+check_alive "rotating the screen"
+
+adb shell settings put system font_scale 1.3
+sleep 4
+adb shell settings put system font_scale 1.0
+sleep 4
+check_alive "the screen being rebuilt"
