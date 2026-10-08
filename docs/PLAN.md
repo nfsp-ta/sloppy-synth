@@ -179,7 +179,8 @@ Decisions so far:
   undefined in the MIDI spec, clear of the CCs Vital reacts to (mod wheel,
   pedals, MPE slide, bank select), and what many small controllers' knobs
   send. The CC and channel per macro belong to the device, not the patch,
-  and are kept in a settings file next to the library.
+  and are kept in a per-device settings file (`~/.config/sloppy-synth` on
+  Linux, next to the library on Android).
 - Scope: a straight Vital port. Microcontroller synths (Pico, FM-1) can't
   hold Vital's engine and belong in separate projects.
 
