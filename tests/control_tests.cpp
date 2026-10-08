@@ -81,7 +81,8 @@ namespace {
     json state = single(server, { { "type", "hello" } });
     CHECK(state["type"] == "state");
     CHECK(state["values"].size() > 700);
-    CHECK(state["macros"].size() == 4);
+    CHECK(state["macros"].size() == 8);
+    CHECK(state["macros"][7] == "MACRO 8");
 
     json info = single(server, { { "type", "get_param_info" } });
     CHECK(info["type"] == "param_info");
@@ -124,6 +125,30 @@ namespace {
     CHECK(single(server, { { "type", "load_patch" }, { "index", 1 } })["type"] == "error");
     CHECK(single(server, { { "type", "load_patch" }, { "index", 9 } })["type"] == "error");
     CHECK(host.getCurrentPatchIndex() == 0);
+
+    // Macro CC assignments.
+    json macro_midi = single(server, { { "type", "get_macro_midi" } });
+    CHECK(macro_midi["type"] == "macro_midi");
+    CHECK(macro_midi["assignments"].size() == 8);
+    CHECK(macro_midi["assignments"][0]["cc"] == 21);
+    CHECK(macro_midi["assignments"][0]["channel"] == 0);
+    CHECK(macro_midi["defaults"][7]["cc"] == 28);
+    CHECK(macro_midi["learning"] == 0);
+    sloppy::MacroMidiMap& map = host.getEngine().getMacroMidi();
+    CHECK(server.handleMessage(json({ { "type", "set_macro_midi" }, { "macro", 2 }, { "cc", 74 } }).dump()).empty());
+    CHECK(map.get(1).cc == 74 && map.get(1).channel == 0);
+    CHECK(server.handleMessage(json({ { "type", "set_macro_midi" }, { "macro", 2 }, { "channel", 16 } }).dump()).empty());
+    CHECK(map.get(1).cc == 74 && map.get(1).channel == 16);
+    CHECK(single(server, { { "type", "set_macro_midi" }, { "macro", 2 }, { "cc", 127 } })["type"] == "error");
+    CHECK(single(server, { { "type", "set_macro_midi" }, { "macro", 9 }, { "cc", 1 } })["type"] == "error");
+    CHECK(single(server, { { "type", "set_macro_midi" }, { "cc", 1 } })["type"] == "error");
+    CHECK(server.handleMessage(json({ { "type", "learn_macro_midi" }, { "macro", 3 } }).dump()).empty());
+    CHECK(single(server, { { "type", "get_macro_midi" } })["learning"] == 3);
+    CHECK(server.handleMessage(json({ { "type", "learn_macro_midi" } }).dump()).empty());
+    CHECK(map.getLearning() == -1);
+    CHECK(single(server, { { "type", "learn_macro_midi" }, { "macro", 9 } })["type"] == "error");
+    CHECK(server.handleMessage(json({ { "type", "reset_macro_midi" } }).dump()).empty());
+    CHECK(map.get(1).cc == 22 && map.get(1).channel == 0);
 
     json mod_info = single(server, { { "type", "get_mod_info" } });
     CHECK(mod_info["type"] == "mod_info");
@@ -308,10 +333,29 @@ namespace {
     // A new routing from one client reaches the other.
     a.sendText(json({ { "type", "add_modulation" }, { "source", "lfo_3" }, { "destination", "osc_2_level" } }).dump());
     json routed = b.receiveType("modulations");
+    CHECK(routed["vital_warnings"].empty());
     bool seen = false;
     for (const json& mod : routed["modulations"])
       seen = seen || (mod["source"] == "lfo_3" && mod["destination"] == "osc_2_level");
     CHECK(seen);
+
+    // CC assignments from one client reach the other, and so does a MIDI
+    // learn finished by the audio thread.
+    a.sendText(json({ { "type", "set_macro_midi" }, { "macro", 5 }, { "cc", 40 }, { "channel", 3 } }).dump());
+    json assigned = b.receiveType("macro_midi");
+    CHECK(assigned["assignments"][4]["cc"] == 40);
+    CHECK(assigned["assignments"][4]["channel"] == 3);
+    a.sendText(json({ { "type", "learn_macro_midi" }, { "macro", 6 } }).dump());
+    CHECK(b.receiveType("macro_midi")["learning"] == 6);
+    {
+      AudioSampleBuffer buffer(2, 256);
+      MidiBuffer midi;
+      midi.addEvent(MidiMessage::controllerEvent(1, 90, 100), 0);
+      host.getEngine().process(buffer, midi);
+    }
+    json learned = b.receiveType("macro_midi");
+    CHECK(learned["learning"] == 0);
+    CHECK(learned["assignments"][5]["cc"] == 90);
 
     // Loading a patch sends everyone the new state.
     a.sendText(json({ { "type", "load_patch" }, { "index", 0 } }).dump());
@@ -338,6 +382,7 @@ namespace {
         ++missing;
       }
     };
+    CHECK(layout["macros"].size() == sloppy::MacroMidiMap::kNumMacros);
     for (const json& name : layout["macros"])
       check(name);
     std::vector<std::string> sources = engine.getModulationSources();

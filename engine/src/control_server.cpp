@@ -253,6 +253,7 @@ namespace sloppy {
       json patchesMessage();
       json modulationInfoMessage();
       json modulationsMessage();
+      json macroMidiMessage();
 
       ControlHost& host_;
       File web_root_;
@@ -324,6 +325,7 @@ namespace sloppy {
     std::map<std::string, float> last_values;
     int last_generation = host_.getPatchGeneration();
     int last_modulation_generation = host_.getEngine().getModulationGeneration();
+    int last_macro_midi_generation = host_.getEngine().getMacroMidi().getGeneration();
     for (const std::string& name : host_.getEngine().getParameterNames())
       last_values[name] = host_.getEngine().getParameter(name);
 
@@ -346,6 +348,16 @@ namespace sloppy {
         last_modulation_generation = modulation_generation;
         if (getNumClients() > 0)
           broadcast(modulationsMessage().dump());
+      }
+
+      // CC assignments change from UIs and from MIDI learn on the audio
+      // thread; either way, save them here, off the audio thread.
+      int macro_midi_generation = host_.getEngine().getMacroMidi().getGeneration();
+      if (macro_midi_generation != last_macro_midi_generation) {
+        last_macro_midi_generation = macro_midi_generation;
+        host_.getEngine().saveSettings();
+        if (getNumClients() > 0)
+          broadcast(macroMidiMessage().dump());
       }
 
       Engine& engine = host_.getEngine();
@@ -450,7 +462,26 @@ namespace sloppy {
         { "destination", modulation.destination },
       });
     }
-    return { { "type", "modulations" }, { "modulations", modulations } };
+    return {
+      { "type", "modulations" },
+      { "modulations", modulations },
+      { "vital_warnings", host_.getEngine().getVitalIncompatibilities() },
+    };
+  }
+
+  json ControlServer::Impl::macroMidiMessage() {
+    MacroMidiMap& map = host_.getEngine().getMacroMidi();
+    json defaults = json::array();
+    for (int i = 0; i < MacroMidiMap::kNumMacros; ++i) {
+      MacroMidiAssignment assignment = MacroMidiMap::defaultAssignment(i);
+      defaults.push_back({ { "cc", assignment.cc }, { "channel", assignment.channel } });
+    }
+    return {
+      { "type", "macro_midi" },
+      { "assignments", json::parse(map.toJson()) },
+      { "defaults", defaults },
+      { "learning", map.getLearning() + 1 },
+    };
   }
 
   // Protocol, one JSON object per WebSocket text message. See docs/PROTOCOL.md.
@@ -487,6 +518,36 @@ namespace sloppy {
 
       if (type == "get_modulations")
         return { modulationsMessage().dump() };
+
+      // Macro CC assignments. Every client, this one included, gets the new
+      // assignments from the broadcast loop.
+      if (type == "get_macro_midi")
+        return { macroMidiMessage().dump() };
+
+      if (type == "set_macro_midi") {
+        MacroMidiMap& map = engine.getMacroMidi();
+        int macro = message.at("macro").get<int>() - 1;
+        MacroMidiAssignment assignment = map.get(macro);
+        assignment.cc = message.value("cc", assignment.cc);
+        assignment.channel = message.value("channel", assignment.channel);
+        std::string set_error;
+        if (!map.set(macro, assignment, set_error))
+          return error(set_error);
+        return {};
+      }
+
+      if (type == "learn_macro_midi") {
+        int macro = message.value("macro", 0);
+        if (macro < 0 || macro > MacroMidiMap::kNumMacros)
+          return error("No macro " + std::to_string(macro) + ".");
+        engine.getMacroMidi().learn(macro - 1);
+        return {};
+      }
+
+      if (type == "reset_macro_midi") {
+        engine.getMacroMidi().resetToDefaults();
+        return {};
+      }
 
       // Every client, this one included, gets the new list of routings from
       // the broadcast loop.

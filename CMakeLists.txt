@@ -79,6 +79,7 @@ add_library(sloppy_engine STATIC
   engine/src/sloppy_engine.cpp
   engine/src/patch_library.cpp
   engine/src/control_server.cpp
+  engine/src/macro_midi.cpp
   ${JUCE_MODULE_SOURCES}
 )
 
