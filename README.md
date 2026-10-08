@@ -110,8 +110,9 @@ x86_64 for the emulator.
   automatically, including ones plugged in later. Program changes switch
   patches, as on the Linux player.
 - **Background:** the synth keeps playing with the screen off or the app in
-  the background, so a phone can sit on a desk as a sound module. Stop it
-  from its notification. Back leaves it playing.
+  the background, so a phone can sit on a desk as a sound module. Back leaves
+  it playing; Quit, in its notification or next to Import in the patch
+  browser, stops it and closes the app.
 - **Patches:** the Import button in the patch browser takes a `.vital` patch,
   a `.vitalbank` bank, or a `.zip` holding presets or banks (loose presets
   become a bank named after the zip). Opening or sharing one from a file manager or

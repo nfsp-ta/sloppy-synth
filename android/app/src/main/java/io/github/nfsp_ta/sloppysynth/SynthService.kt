@@ -14,12 +14,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.Process
 
 /**
  * Keeps the synth playing while the app is in the background or the screen
  * is off, so a phone can sit on a desk as a MIDI sound module. Also owns the
- * MIDI inputs. The notification's Stop button shuts everything down.
+ * MIDI inputs. Quit, in the notification or the app, shuts everything down.
  */
 class SynthService : Service() {
     private var midi: MidiInputs? = null
@@ -33,6 +36,10 @@ class SynthService : Service() {
         }
 
         val notification = buildNotification()
+        // On Android 13+ the notification only shows once the user allows
+        // notifications, which is usually after this first runs.
+        notificationShown = (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .areNotificationsEnabled()
         if (Build.VERSION.SDK_INT >= 29)
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         else
@@ -59,6 +66,9 @@ class SynthService : Service() {
         stopSelf()
         running = false
         onStopped?.invoke()
+        // Quit means quit: the web UI server and engine threads live in the
+        // process, so end it once the activity has had a moment to close.
+        Handler(Looper.getMainLooper()).postDelayed({ Process.killProcess(Process.myPid()) }, 300)
     }
 
     private fun buildNotification(): Notification {
@@ -97,13 +107,23 @@ class SynthService : Service() {
         var running = false
             private set
 
-        /** Called on the main thread when the user stops the synth. */
+        /** Whether the notification could be shown when last posted. */
+        @Volatile
+        var notificationShown = false
+            private set
+
+        /** Called on the main thread when the user quits. */
         var onStopped: (() -> Unit)? = null
 
         fun start(context: Context) {
             val intent = Intent(context, SynthService::class.java)
             if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent)
             else context.startService(intent)
+        }
+
+        /** Stops the synth and ends the app. */
+        fun quit(context: Context) {
+            context.startService(Intent(context, SynthService::class.java).setAction(ACTION_STOP))
         }
     }
 }

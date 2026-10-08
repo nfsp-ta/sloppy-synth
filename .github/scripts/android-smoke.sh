@@ -76,3 +76,31 @@ sleep 4
 adb shell settings put system font_scale 1.0
 sleep 4
 check_alive "the screen being rebuilt"
+
+# The notification (with its Quit button) must show once notifications are
+# allowed. On Android 13+ that's after the synth has started: grant it as
+# the user would, close the prompt, and come back to the app.
+has_notification() {
+  adb shell dumpsys notification --noredact | grep -q "pkg=$package"
+}
+sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
+if [ "$sdk" -ge 33 ]; then
+  if has_notification; then
+    echo "(Notification already listed before permission was granted.)"
+  fi
+  adb shell pm grant "$package" android.permission.POST_NOTIFICATIONS
+  adb shell input keyevent KEYCODE_BACK
+  sleep 2
+  adb shell am start -W -n "$package/.MainActivity"
+fi
+for _ in $(seq 1 10); do
+  has_notification && break
+  sleep 1
+done
+if ! has_notification; then
+  echo "The synth's notification isn't showing."
+  adb shell dumpsys notification --noredact | tail -n 80 || true
+  exit 1
+fi
+check_alive "allowing notifications"
+echo "Notification is showing."

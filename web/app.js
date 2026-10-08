@@ -1167,6 +1167,11 @@ function setupAndroid() {
   const button = $("import-patches");
   button.hidden = false;
   button.addEventListener("click", () => android.importFile());
+  if (android.quit) {
+    const quit = $("quit-app");
+    quit.hidden = false;
+    quit.addEventListener("click", () => android.quit());
+  }
   window.sloppyImported = (message, ok) => {
     toast(message);
     if (ok) send({ type: "list_patches" });

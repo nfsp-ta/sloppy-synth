@@ -80,6 +80,23 @@ class MainActivity : Activity() {
         handleIncoming(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Notifications were allowed after the synth started (the
+        // permission prompt, or later in settings): post it again.
+        if (SynthService.running && !SynthService.notificationShown && notificationsAllowed())
+            SynthService.start(this)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (SynthService.running && !SynthService.notificationShown && notificationsAllowed())
+            SynthService.start(this)
+    }
+
+    private fun notificationsAllowed() =
+        (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager).areNotificationsEnabled()
+
     override fun onDestroy() {
         SynthService.onStopped = null
         webView.destroy()
@@ -235,6 +252,16 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun audioInfo(): String = NativeSynth.describeAudio()
+
+        @JavascriptInterface
+        fun quit() = runOnUiThread {
+            if (SynthService.running) SynthService.quit(this@MainActivity)
+            else {
+                NativeSynth.stopAudio()
+                finishAndRemoveTask()
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
+        }
     }
 
     /** Keeps the WebView on the synth's own pages; anything else opens in a browser. */
