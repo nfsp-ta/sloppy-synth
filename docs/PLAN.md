@@ -12,43 +12,17 @@ The history of each change is in the squashed commits on `main`.
 
 The engine, the Linux host, the web UI and the Android app all have a first
 working version. The Android app runs on real phones and tablets; the engine
-has not been measured on a Raspberry Pi yet. Next up is measuring
-performance on real ARM hardware and limiting heavy patches to what each
-device can play.
+has not been measured on old phones or a Raspberry Pi yet. While that
+hardware is being found, next up is work that needs none: the web UI,
+patches and banks, and the Android app.
 
 ## Next steps
 
-Roughly in order. Each step is meant to be about one pull request.
+Roughly in order. Each step is meant to be about one pull request. Steps 1
+to 3 need no new hardware; step 4 onwards waits on old phones and a
+Pi Zero 2 W, Pi 3 or newer.
 
-### 1. Measure on real ARM hardware
-
-Nobody knows yet how many voices a phone or a Pi can play. Measured on an
-x86 server core (2.1 GHz Xeon, SSE2): the init patch renders 8 voices at
-about 20x real time, and a test patch with 4-voice unison, two oscillators
-and effects at about 6.5x. A Pi 3's Cortex-A53 at 1.2 GHz is likely around
-ten times slower, so light patches should play with a handful of voices and
-heavy factory patches may not keep up.
-
-- Android: a benchmark that runs on the device (in the app, or
-  `sloppy-render` built with the NDK and run over `adb`), reporting "x real
-  time" for a small set of reference patches and voice counts.
-- Raspberry Pi: needs a Pi Zero 2 W, Pi 3 or newer. A Pi 1 can't run the
-  engine at all (ARMv6, no NEON). On the board:
-
-  ```sh
-  ./sloppy-render patch.vital -n C3,E3,G3,B3 -l 5 -o /tmp/x.wav   # look at "x real time"
-  ```
-
-- Write the results down here so later work can be judged against them.
-
-### 2. Per-device limits
-
-Applied when a patch loads, so patches still load, just thinner: cap
-polyphony and unison voices, force oversampling to 1x. Defaults per device
-class picked from step 1's numbers, adjustable in the UI. Shared by the
-Linux and Android hosts.
-
-### 3. Web UI
+### 1. Web UI
 
 - Envelope and LFO shape views.
 - Oscilloscope and output level, streamed over the control protocol at a
@@ -59,7 +33,7 @@ Linux and Android hosts.
   already CSS variables at the top of `web/style.css`, so a theme can be a
   file of those variables that is picked, imported and shared from the UI.
 
-### 4. Patches and banks
+### 2. Patches and banks
 
 - Browse by Vital's style tag; favourites.
 - Import `.vitaltable` wavetables, `.vitallfo` shapes and samples into
@@ -68,13 +42,43 @@ Linux and Android hosts.
 - Check against a set of real-world patches (Ashley's own, or freely
   licensed community banks). Vital's factory presets can't be bundled.
 
-### 5. Android
+### 3. Android
 
 - Bluetooth MIDI pairing from the app.
 - An option to let other devices on the network edit the phone's synth
   (the web UI is served on `127.0.0.1` only today).
 - A release signing key, then F-Droid and Google Play (GPLv3 is fine on
   both).
+
+### 4. Measure on real ARM hardware
+
+Nobody knows yet how many voices a phone or a Pi can play. Measured on an
+x86 server core (2.1 GHz Xeon, SSE2): the init patch renders 8 voices at
+about 20x real time, and a test patch with 4-voice unison, two oscillators
+and effects at about 6.5x. A Pi 3's Cortex-A53 at 1.2 GHz is likely around
+ten times slower, so light patches should play with a handful of voices and
+heavy factory patches may not keep up.
+
+- Android: a benchmark that runs on the device (in the app, or
+  `sloppy-render` built with the NDK and run over `adb`), reporting "x real
+  time" for a small set of reference patches and voice counts. This part
+  can be built early and tried on the Pixel 10a and Galaxy Tab A9+ while
+  the old phones are found.
+- Raspberry Pi: needs a Pi Zero 2 W, Pi 3 or newer. A Pi 1 can't run the
+  engine at all (ARMv6, no NEON). On the board:
+
+  ```sh
+  ./sloppy-render patch.vital -n C3,E3,G3,B3 -l 5 -o /tmp/x.wav   # look at "x real time"
+  ```
+
+- Write the results down here so later work can be judged against them.
+
+### 5. Per-device limits
+
+Applied when a patch loads, so patches still load, just thinner: cap
+polyphony and unison voices, force oversampling to 1x. Defaults per device
+class picked from step 4's numbers, adjustable in the UI. Shared by the
+Linux and Android hosts.
 
 ### 6. Raspberry Pi host
 
