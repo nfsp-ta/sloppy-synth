@@ -333,6 +333,7 @@ namespace {
     // A new routing from one client reaches the other.
     a.sendText(json({ { "type", "add_modulation" }, { "source", "lfo_3" }, { "destination", "osc_2_level" } }).dump());
     json routed = b.receiveType("modulations");
+    CHECK(routed["vital_warnings"].empty());
     bool seen = false;
     for (const json& mod : routed["modulations"])
       seen = seen || (mod["source"] == "lfo_3" && mod["destination"] == "osc_2_level");

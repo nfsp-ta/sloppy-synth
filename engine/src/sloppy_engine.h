@@ -93,6 +93,12 @@ namespace sloppy {
       bool addModulation(const std::string& source, const std::string& destination, float amount,
                          std::string& error);
       bool removeModulation(const std::string& source, const std::string& destination);
+      // What in the current patch Vital itself can't play. Vital still opens
+      // the file but leaves these out. Today that is routings from macros
+      // 5 to 8 (Vital has 4 macros). One line per problem, for showing to
+      // people; empty when Vital would play the patch as it is.
+      static constexpr int kVitalMacros = 4;
+      std::vector<std::string> getVitalIncompatibilities();
       // Changes whenever routings are added or removed, or a patch is loaded.
       int getModulationGeneration() const { return modulation_generation_; }
 

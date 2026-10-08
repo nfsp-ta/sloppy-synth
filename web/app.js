@@ -15,6 +15,7 @@ const state = {
   patches: [],
   modInfo: { sources: [], destinations: [] },
   modulations: [],     // { slot, source, destination }
+  vitalWarnings: [],   // what Vital would leave out of this patch
   layout: null,
   view: "play",
   page: null,
@@ -139,6 +140,8 @@ function handleMessage(message) {
       break;
     case "modulations":
       state.modulations = message.modulations;
+      state.vitalWarnings = message.vital_warnings || [];
+      updateVitalWarning();
       if (state.view === "edit") renderEditPage({ keepScroll: true });
       break;
     case "macro_midi":
@@ -366,6 +369,18 @@ function renderMacros() {
     container.append(card);
   });
   updateCcChips();
+}
+
+// Macros 5-8 are sloppy-synth's own; Vital opens the patch without them.
+function updateVitalWarning() {
+  const el = $("vital-warning");
+  const warnings = state.vitalWarnings;
+  el.hidden = !warnings.length;
+  el.textContent = warnings.length
+    ? `Vital has only 4 macros. It still opens this patch, but without the routings from ${
+      warnings.map((w) => w.match(/^Macro \d/)?.[0] || w).join(", ")}.`
+    : "";
+  el.title = warnings.join("\n");
 }
 
 // ---- Macro MIDI CCs -------------------------------------------------------

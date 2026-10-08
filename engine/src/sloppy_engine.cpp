@@ -269,6 +269,22 @@ namespace sloppy {
     return modulations;
   }
 
+  std::vector<std::string> Engine::getVitalIncompatibilities() {
+    std::vector<std::string> problems;
+    std::vector<Modulation> modulations = getModulations();
+    for (int macro = kVitalMacros + 1; macro <= vital::kNumMacros; ++macro) {
+      std::string source = "macro_control_" + std::to_string(macro);
+      int routings = 0;
+      for (const Modulation& modulation : modulations)
+        routings += modulation.source == source ? 1 : 0;
+      if (routings > 0) {
+        problems.push_back("Macro " + std::to_string(macro) + " has " + std::to_string(routings) +
+                           (routings == 1 ? " routing" : " routings") + ", which Vital would leave out.");
+      }
+    }
+    return problems;
+  }
+
   bool Engine::addModulation(const std::string& source, const std::string& destination, float amount,
                              std::string& error) {
     if (engine_->getModulationSources().count(source) == 0) {

@@ -50,7 +50,9 @@ parameter's `min`..`max` range.
   be modulated).
 - `modulations`: `modulations`, a list of `slot` (1-64), `source` and
   `destination`. Sent to every client when a routing is added or removed or
-  a patch is loaded. A routing's depth and options are ordinary parameters
+  a patch is loaded. `vital_warnings` lists what Vital itself would leave out
+  of the current patch (today: routings from macros 5 to 8), one readable
+  line each; empty when Vital would play it as is. A routing's depth and options are ordinary parameters
   named after its slot, changed with `set` and reported in `params`:
   `modulation_<slot>_amount` (-1 to 1), `_bipolar`, `_stereo`, `_bypass` and
   `_power`.

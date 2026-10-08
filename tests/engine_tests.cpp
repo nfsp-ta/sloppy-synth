@@ -300,7 +300,12 @@ namespace {
     CHECK(engine.getParameter("macro_control_6") == 0.0f);
     CHECK(engine.getMacroName(5) == "MACRO 6");
 
+    CHECK(engine.getVitalIncompatibilities().empty());
     CHECK(engine.addModulation("macro_control_6", "osc_1_level", -1.0f, error));
+    CHECK(engine.addModulation("macro_control_4", "osc_2_level", 0.5f, error));  // Vital has macro 4
+    std::vector<std::string> problems = engine.getVitalIncompatibilities();
+    CHECK(problems.size() == 1);
+    CHECK(problems.size() == 1 && problems[0].find("Macro 6") == 0);
     engine.setParameter("macro_control_6", 0.7f);
     CHECK(engine.savePatch(temp.getFile()));
 

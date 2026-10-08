@@ -462,7 +462,11 @@ namespace sloppy {
         { "destination", modulation.destination },
       });
     }
-    return { { "type", "modulations" }, { "modulations", modulations } };
+    return {
+      { "type", "modulations" },
+      { "modulations", modulations },
+      { "vital_warnings", host_.getEngine().getVitalIncompatibilities() },
+    };
   }
 
   json ControlServer::Impl::macroMidiMessage() {

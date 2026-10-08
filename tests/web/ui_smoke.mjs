@@ -77,6 +77,14 @@ await page({ width: 390, height: 844 }, 'phone', async (p) => {
   await p.selectOption('select[aria-label="Modulation destination"]', 'osc_3_level');
   await p.locator('.routes-add .pill', { hasText: 'Add' }).click();
   await p.waitForSelector('.routing:has-text("LFO 4")');
+  // A routing from macro 6 is something Vital would leave out.
+  await p.selectOption('select[aria-label="Modulation source"]', 'macro_control_6');
+  await p.selectOption('select[aria-label="Modulation destination"]', 'osc_2_level');
+  await p.locator('.routes-add .pill', { hasText: 'Add' }).click();
+  await p.waitForSelector('#vital-warning:not([hidden])', { state: 'attached' });
+  console.log('vital warning:', await p.textContent('#vital-warning'));
+  await p.locator('.routing', { hasText: 'Macro 6' }).locator('button[aria-label^="Remove"]').click();
+  await p.waitForSelector('#vital-warning[hidden]', { state: 'attached' });
   await p.screenshot({ path: `${out}/phone-mod.png` });
   await p.locator('.chip', { hasText: 'LFO' }).click();
   await p.locator('.instance', { hasText: '4' }).click();

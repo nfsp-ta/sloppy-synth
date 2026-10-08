@@ -223,6 +223,16 @@ main {
 .sheet-buttons .primary { margin-left: auto; background: var(--accent); color: #14161b; font-weight: 600; }
 #mm-learn[aria-pressed="true"] { background: var(--accent-2); color: #14161b; }
 
+.vital-warning {
+  margin: 0 auto;
+  padding: 0 16px;
+  max-width: 900px;
+  font-size: 12px;
+  color: var(--warn);
+  text-align: center;
+}
+.vital-warning[hidden] { display: none; }
+
 .play-controls {
   display: flex;
   align-items: center;
