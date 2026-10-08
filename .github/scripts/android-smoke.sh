@@ -47,3 +47,20 @@ if [ "$status" != "101" ]; then
   exit 1
 fi
 echo "Control socket accepts WebSocket connections."
+
+# Rotating the screen must not take the app down: turn to landscape and
+# back, then check the app and its server are still there.
+adb shell settings put system accelerometer_rotation 0
+for rotation in 1 0 3 0; do
+  adb shell settings put system user_rotation "$rotation"
+  sleep 3
+done
+if ! adb shell pidof "$package" > /dev/null; then
+  echo "The app died when the screen rotated."
+  echo "--- crash log"
+  adb logcat -d -b crash || true
+  adb logcat -d -s sloppy-synth:* AndroidRuntime:E DEBUG:* chromium:* cr_*:* libc:* || true
+  exit 1
+fi
+curl -sSf http://127.0.0.1:18080/ > /dev/null
+echo "Survived rotating the screen."
