@@ -19,6 +19,7 @@
       <span class="patch-meta" id="patch-meta"></span>
     </button>
     <button class="icon-button" id="next-patch" aria-label="Next patch">&#x203A;</button>
+    <button class="icon-button patch-warning" id="patch-warning" aria-label="What this patch is missing" hidden>!</button>
     <span class="status" id="status" title="Disconnected" aria-live="polite"></span>
   </header>
 
@@ -63,6 +64,12 @@
   </main>
 
   <div class="toast" id="toast" role="status" hidden></div>
+
+  <dialog class="warnings" id="warnings">
+    <h2>Not everything in this patch is here yet</h2>
+    <ul id="warnings-list"></ul>
+    <form method="dialog"><button class="warnings-close">OK</button></form>
+  </dialog>
 
   <script type="module" src="app.js"></script>
 </body>

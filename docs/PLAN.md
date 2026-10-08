@@ -41,6 +41,19 @@ Pi Zero 2 W, Pi 3 or newer.
 - Tuning files (`.scl`, `.tun`), already supported by the engine.
 - Check against a set of real-world patches (Ashley's own, or freely
   licensed community banks). Vital's factory presets can't be bundled.
+- Catch up with newer Vital releases. The public source is Vital 1.0.6;
+  1.5 added custom filter, flanger and phaser spectral warps, a seed for
+  the random-amplitude warp and a subharmonic unison mode, and 1.6
+  reportedly a Mod Remap ramp option. Patches using them load today with
+  warnings. Rebuild them clean-room from patches saved by Vital 1.6.4
+  (diff their JSON against ours) and from reference renders of the same
+  MIDI through both synths. Never decompile Vital's binaries or commit
+  them: they aren't GPL. Background: `research/vital-newer-versions.md`
+  in the project files.
+- Compare CPU use against Vital 1.6.4 with its window closed. Newer
+  releases feel faster, but the only audio change Vital has published is
+  for sample rates above 48 kHz; most gains may be in its GUI, which this
+  engine doesn't have.
 
 ### 3. Android
 
@@ -162,7 +175,8 @@ Decisions so far:
 - Headless engine (`sloppy_engine`, `sloppy::Engine`) built against JUCE's
   non-GUI modules only, with real-time-safe patch loading.
 - `.vital` load and save, `.vitalbank` import, patch library by bank and
-  folder.
+  folder. Patches from newer 1.x releases load too, with warnings for
+  anything this engine lacks.
 - Linux host `sloppy-synth`: ALSA audio, MIDI with hot-plug and program
   change, and the control server. `sloppy-render` renders patches to WAV
   and doubles as a benchmark.

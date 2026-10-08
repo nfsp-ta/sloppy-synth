@@ -116,6 +116,38 @@ namespace {
     CHECK(engine.getNumModulations("filter_1_cutoff") == 1);
   }
 
+  void testLoadNewerMinorPatch() {
+    sloppy::Engine engine;
+    std::string error;
+    CHECK(engine.loadPatch(fixture("from_vital_1_6.vital"), error));
+    CHECK(engine.getPatchVersion() == "1.6.4");
+    CHECK(engine.getParameter("osc_1_spectral_morph_type") == 0.0f);
+    CHECK(engine.getParameter("filter_1_on") == 1.0f);
+    CHECK(engine.getNumModulations("filter_1_cutoff") == 1);
+
+    std::string all;
+    for (const std::string& warning : engine.getLoadWarnings())
+      all += warning + "\n";
+    std::cerr << all;
+    CHECK(engine.getLoadWarnings().size() == 4);
+    CHECK(all.find("Vital 1.6.4") != std::string::npos);
+    CHECK(all.find("Morph Type") != std::string::npos);
+    CHECK(all.find("osc_1_made_up_seed") != std::string::npos);
+    CHECK(all.find("lfos/made_up_ramp") != std::string::npos);
+    CHECK(all.find("made_up_source to filter_1_cutoff") != std::string::npos);
+
+    engine.prepare(44100.0, 256);
+    RenderStats stats = render(engine, 36, 0.5);
+    CHECK(stats.finite);
+    CHECK(stats.rms > 0.01);
+
+    // Patches this engine fully understands load without warnings.
+    CHECK(engine.loadPatch(fixture("test_bass_v1_0.vital"), error));
+    CHECK(engine.getLoadWarnings().empty());
+    CHECK(engine.loadPatch(fixture("test_bass.vital"), error));
+    CHECK(engine.getLoadWarnings().empty());
+  }
+
   void testRejectFuturePatch() {
     sloppy::Engine engine;
     std::string error;
@@ -388,7 +420,8 @@ int main() {
     { "silent without notes", testSilentWithoutNotes },
     { "load patch", testLoadPatch },
     { "load older patch", testLoadOlderPatch },
-    { "reject patch from a newer version", testRejectFuturePatch },
+    { "load patch from a newer 1.x release", testLoadNewerMinorPatch },
+    { "reject patch from a newer major version", testRejectFuturePatch },
     { "reject corrupt patch", testRejectCorruptPatch },
     { "save round trip", testSaveRoundTrip },
     { "MIDI from another thread plays", testMidiFromAnotherThreadPlays },

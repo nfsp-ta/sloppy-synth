@@ -91,6 +91,18 @@ def pad_patch(init):
     return patch
 
 
+def newer_minor_patch(bass):
+    patch = copy.deepcopy(bass)
+    patch["synth_version"] = "1.6.4"
+    patch["preset_name"] = "Test Bass 1.6"
+    s = patch["settings"]
+    s["osc_1_spectral_morph_type"] = 13.0  # past the end of this engine's list
+    s["osc_1_made_up_seed"] = 0.5
+    s["lfos"][0]["made_up_ramp"] = 0.25
+    add_modulation(patch, 4, "made_up_source", "filter_1_cutoff", 0.4)
+    return patch
+
+
 def write_bank(name, bank_folder, patches, extra_entries=()):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
@@ -123,6 +135,10 @@ def main():
     newer = copy.deepcopy(bass)
     newer["synth_version"] = "9.0.0"
     write_patch("from_the_future.vital", newer)
+
+    # From a newer 1.x release: loads, but what this engine lacks is reset or
+    # skipped and reported. The new names are made up for the test.
+    write_patch("from_vital_1_6.vital", newer_minor_patch(bass))
 
     write_bank("Test Bank.vitalbank", "Test Bank", [("Bass", bass), ("Pads", pad), ("", older)])
 

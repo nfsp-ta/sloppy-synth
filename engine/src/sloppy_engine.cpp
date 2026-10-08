@@ -6,6 +6,7 @@
 #include "sloppy_engine.h"
 
 #include <algorithm>
+#include <set>
 
 #include "json/json.h"
 #include "load_save.h"
@@ -83,35 +84,218 @@ namespace sloppy {
       error = "Patch file not found: " + file.getFullPathName().toStdString();
       return false;
     }
-    if (!loadFromFile(file, error)) {
-      if (error.empty())
-        error = "Couldn't load patch.";
+    json state;
+    try {
+      state = json::parse(file.loadFileAsString().toStdString(), nullptr);
+    }
+    catch (const json::exception&) {
+      error = "Preset file is corrupted.";
       return false;
     }
-    prepare(sample_rate_, vital::kMaxBufferSize);
-    ++modulation_generation_;
+    if (!loadJson(std::move(state), error))
+      return false;
+
+    active_file_ = file;
+    setPresetName(file.getFileNameWithoutExtension());
     return true;
   }
 
   bool Engine::loadPatchFromString(const std::string& patch_json, std::string& error) {
+    json state;
     try {
-      json state = json::parse(patch_json, nullptr);
-      if (!loadFromJson(state)) {
-        error = "Preset was created with a newer version.";
-        return false;
-      }
+      state = json::parse(patch_json, nullptr);
     }
     catch (const json::exception& e) {
       error = std::string("Preset file is corrupted: ") + e.what();
       return false;
     }
+    return loadJson(std::move(state), error);
+  }
+
+  bool Engine::loadJson(json state, std::string& error) {
+    if (!state.is_object() || (state.count("synth_version") && !state["synth_version"].is_string())) {
+      error = "Preset file is corrupted.";
+      return false;
+    }
+    std::string version = state.value("synth_version", std::string("0.0.0"));
+    // Vital refuses any patch whose major.minor is newer than its own. Newer
+    // 1.x releases keep the same format and only add settings, so let those
+    // through, posing as our own version so Vital doesn't try to upgrade them.
+    String version_string(version);
+    String major = version_string.upToFirstOccurrenceOf(".", false, true);
+    String our_major = String(ProjectInfo::versionString).upToFirstOccurrenceOf(".", false, true);
+    if (major.containsOnly("0123456789") && major.getIntValue() > our_major.getIntValue()) {
+      error = "Preset was created with Vital " + version + ", which is too new to load.";
+      return false;
+    }
+    if (LoadSave::compareFeatureVersionStrings(version, ProjectInfo::versionString) > 0)
+      state["synth_version"] = ProjectInfo::versionString;
+
+    std::vector<std::string> warnings;
+    {
+      ScopedLock lock(getCriticalSection());
+      try {
+        if (!loadFromJson(state)) {
+          error = "Preset was created with a newer version.";
+          return false;
+        }
+        checkUnsupported(state, version, warnings);
+      }
+      catch (const json::exception& e) {
+        error = std::string("Preset file is corrupted: ") + e.what();
+        return false;
+      }
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(load_info_lock_);
+      load_warnings_ = warnings;
+      patch_version_ = version;
+    }
     prepare(sample_rate_, vital::kMaxBufferSize);
     ++modulation_generation_;
     return true;
   }
 
+  namespace {
+    // The Vital release this engine's code matches. ProjectInfo::versionString
+    // says 1.5.5 so that Vital 1.5 patches pass the version check, but the
+    // code underneath is the public 1.0.6 source.
+    constexpr const char* kEngineVitalVersion = "1.0.6";
+    constexpr size_t kMaxNamesListed = 6;
+
+    // Collects the keys in `theirs` that `ours` doesn't have, walking objects
+    // and arrays in step. Array positions are dropped from the paths, so the
+    // same setting on three oscillators is reported once.
+    void findUnknownKeys(const json& theirs, const json& ours, const std::string& path,
+                         std::set<std::string>& unknown) {
+      if (theirs.is_object() && ours.is_object()) {
+        for (auto item = theirs.begin(); item != theirs.end(); ++item) {
+          std::string child = path.empty() ? item.key() : path + "/" + item.key();
+          auto found = ours.find(item.key());
+          if (found == ours.end())
+            unknown.insert(child);
+          else
+            findUnknownKeys(item.value(), *found, child, unknown);
+        }
+      }
+      else if (theirs.is_array() && ours.is_array()) {
+        size_t count = std::min(theirs.size(), ours.size());
+        for (size_t i = 0; i < count; ++i)
+          findUnknownKeys(theirs[i], ours[i], path, unknown);
+      }
+    }
+
+    template <class Container>
+    std::string listNames(const Container& names) {
+      std::string list;
+      size_t listed = 0;
+      for (const std::string& name : names) {
+        if (listed == kMaxNamesListed) {
+          list += " and " + std::to_string(names.size() - listed) + " more";
+          break;
+        }
+        list += (listed ? ", " : "") + name;
+        ++listed;
+      }
+      return list;
+    }
+  }
+
+  // Called right after loading, with the patch as it was handed to Vital.
+  // Resets choices this engine doesn't have and lists what was left out.
+  void Engine::checkUnsupported(const json& original, const std::string& version,
+                                std::vector<std::string>& warnings) {
+    // A choice past the end of this engine's list (a newer filter model or
+    // spectral warp, say) would index past the end of its tables.
+    for (auto& control : controls_) {
+      if (!vital::Parameters::isParameter(control.first))
+        continue;
+      const vital::ValueDetails& details = vital::Parameters::getDetails(control.first);
+      float value = control.second->value();
+      if (details.value_scale != vital::ValueDetails::kIndexed ||
+          (value >= details.min - 0.5f && value <= details.max + 0.5f))
+        continue;
+      control.second->set(details.default_value);
+      std::string warning = details.display_name + " uses an option this engine doesn't have";
+      int default_index = static_cast<int>(details.default_value - details.min);
+      if (details.string_lookup && default_index >= 0 &&
+          static_cast<size_t>(default_index) < valueNameCount(details.string_lookup))
+        warning += ", so it was set to " + details.string_lookup[default_index];
+      warnings.push_back(warning + ".");
+    }
+
+    // Older patches go through Vital's upgrade code, which renames settings,
+    // and can't have anything this engine lacks.
+    if (LoadSave::compareVersionStrings(version, kEngineVitalVersion) <= 0 || !original.count("settings"))
+      return;
+
+    const json& settings = original["settings"];
+    json ours = saveToJson()["settings"];
+    std::set<std::string> unknown;
+    std::vector<std::string> dropped;
+    for (auto item = settings.begin(); item != settings.end(); ++item) {
+      if (item.key() == "modulations")
+        continue;
+      auto found = ours.find(item.key());
+      if (found == ours.end())
+        unknown.insert(item.key());
+      else
+        findUnknownKeys(item.value(), *found, item.key(), unknown);
+    }
+
+    if (settings.count("modulations") && settings["modulations"].is_array()) {
+      const json& modulations = settings["modulations"];
+      const json& our_modulations = ours["modulations"];
+      for (size_t i = 0; i < modulations.size(); ++i) {
+        const json& modulation = modulations[i];
+        std::string source = modulation.value("source", std::string());
+        std::string destination = modulation.value("destination", std::string());
+        if (source.empty() || destination.empty())
+          continue;
+        if (engine_->getModulationSource(source) == nullptr ||
+            engine_->getMonoModulationDestination(destination) == nullptr) {
+          dropped.push_back(source + " to " + destination);
+        }
+        else if (modulation.count("line_mapping") && i < our_modulations.size() &&
+                 our_modulations[i].count("line_mapping")) {
+          findUnknownKeys(modulation["line_mapping"], our_modulations[i]["line_mapping"],
+                          "modulations/line_mapping", unknown);
+        }
+      }
+    }
+
+    if (!unknown.empty()) {
+      warnings.push_back("Ignored " + std::to_string(unknown.size()) +
+                         (unknown.size() == 1 ? " setting" : " settings") +
+                         " this engine doesn't have: " + listNames(unknown) + ".");
+    }
+    if (!dropped.empty()) {
+      warnings.push_back("Left out " + std::to_string(dropped.size()) +
+                         (dropped.size() == 1 ? " modulation" : " modulations") +
+                         " this engine can't route: " + listNames(dropped) + ".");
+    }
+    if (!warnings.empty())
+      warnings.insert(warnings.begin(), "Made with Vital " + version + ", so it may not sound the same here.");
+  }
+
+  std::vector<std::string> Engine::getLoadWarnings() const {
+    std::lock_guard<std::mutex> lock(load_info_lock_);
+    return load_warnings_;
+  }
+
+  std::string Engine::getPatchVersion() const {
+    std::lock_guard<std::mutex> lock(load_info_lock_);
+    return patch_version_;
+  }
+
   void Engine::loadInitPatch() {
     loadInitPreset();
+    {
+      std::lock_guard<std::mutex> lock(load_info_lock_);
+      load_warnings_.clear();
+      patch_version_ = ProjectInfo::versionString;
+    }
     ++modulation_generation_;
   }
 

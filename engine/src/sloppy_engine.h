@@ -14,6 +14,7 @@
 #include "synth_base.h"
 
 #include <atomic>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -63,9 +64,19 @@ namespace sloppy {
 
       // Loads a .vital patch. Vital patches embed their wavetables, samples
       // and LFO shapes, so a single file is all that's needed.
+      //
+      // Patches from newer Vital releases (1.x) load too. Whatever this
+      // engine doesn't have is skipped or reset, and listed in
+      // getLoadWarnings(). Patches from a newer major version are refused.
       bool loadPatch(const File& file, std::string& error);
       bool loadPatchFromString(const std::string& patch_json, std::string& error);
       void loadInitPatch();
+
+      // What the last loaded patch uses that this engine can't play, one
+      // readable line each. Empty when the patch loaded fully.
+      std::vector<std::string> getLoadWarnings() const;
+      // The Vital version that saved the last loaded patch, e.g. "1.6.4".
+      std::string getPatchVersion() const;
 
       bool savePatch(const File& file) { return saveToFile(file); }
 
@@ -101,12 +112,19 @@ namespace sloppy {
       double getSampleRateHz() const { return sample_rate_; }
 
     private:
+      bool loadJson(json state, std::string& error);
+      void checkUnsupported(const json& original, const std::string& version,
+                            std::vector<std::string>& warnings);
+
       double sample_rate_ = 44100.0;
       double seconds_time_ = 0.0;
       SpinLock midi_lock_;
       MidiBuffer incoming_midi_;
       MidiBuffer pending_midi_;
       std::atomic<int> modulation_generation_ { 0 };
+      mutable std::mutex load_info_lock_;
+      std::vector<std::string> load_warnings_;
+      std::string patch_version_;
 
       JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)
   };
