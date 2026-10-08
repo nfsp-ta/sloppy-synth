@@ -49,6 +49,16 @@ namespace sloppy {
       // the folder the bank was unpacked into.
       bool importBank(const File& bank_file, std::string& bank_name, std::string& error);
 
+      // Imports an ordinary .zip holding Vital presets or banks:
+      //  - .vitalbank files inside it are imported as banks;
+      //  - a zip laid out like a bank (<Bank>/Presets/...) is unpacked as one;
+      //  - otherwise its .vital presets go into a bank named after the zip,
+      //    keeping their folders.
+      // `zip_name` is the zip's own file name, for naming that bank (the file
+      // itself may be a temporary copy). `summary` says what was imported.
+      bool importZip(const File& zip_file, const String& zip_name, std::string& summary,
+                     std::string& error);
+
       // Copies a single .vital patch into <root>/User/Presets.
       bool importPatch(const File& patch_file, File& imported, std::string& error);
 

@@ -92,7 +92,7 @@ namespace {
         patches_ = std::move(patches);
       }
 
-      // Imports a .vitalbank or .vital file. `name` is the file's display
+      // Imports a .vitalbank, .vital or .zip file. `name` is the file's display
       // name, since files shared from other apps often arrive without one.
       bool importFile(const File& file, const String& name, std::string& message) {
         std::string error;
@@ -121,8 +121,13 @@ namespace {
             return true;
           }
         }
+        else if (name.endsWithIgnoreCase(".zip")) {
+          ok = library_.importZip(file, name, message, error);
+          if (!ok)
+            message = error;
+        }
         else
-          message = "Not a Vital patch (.vital) or bank (.vitalbank).";
+          message = "Not a Vital patch (.vital), bank (.vitalbank) or a zip of them.";
 
         if (ok)
           rescan();

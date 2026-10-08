@@ -25,6 +25,28 @@ namespace sloppy {
       parts.addTokens(path.replaceCharacter('\\', '/'), "/", "");
       return !parts.contains("..");
     }
+
+    // macOS adds "__MACOSX/._name" copies of every file to zips it makes.
+    bool isMacMetadata(const String& path) {
+      return path.startsWith("__MACOSX/") || path.fromLastOccurrenceOf("/", false, false).startsWith("._");
+    }
+
+    bool writeEntry(ZipFile& zip, int index, const File& target) {
+      std::unique_ptr<InputStream> input(zip.createStreamForEntry(index));
+      if (input == nullptr || !target.getParentDirectory().createDirectory())
+        return false;
+      target.deleteFile();
+      FileOutputStream output(target);
+      if (!output.openedOk())
+        return false;
+      output.writeFromInputStream(*input, -1);
+      output.flush();
+      return output.getStatus().wasOk();
+    }
+
+    std::string plural(int count, const char* word) {
+      return std::to_string(count) + " " + word + (count == 1 ? "" : "s");
+    }
   }
 
   File PatchLibrary::defaultRoot() {
@@ -89,6 +111,131 @@ namespace sloppy {
 
     bank_name = top_folders.size() == 1 ? top_folders[0].toStdString()
                                         : bank_file.getFileNameWithoutExtension().toStdString();
+    return true;
+  }
+
+  bool PatchLibrary::importZip(const File& zip_file, const String& zip_name, std::string& summary,
+                              std::string& error) {
+    FileInputStream input_stream(zip_file);
+    if (!input_stream.openedOk()) {
+      error = "Couldn't open " + zip_name.toStdString();
+      return false;
+    }
+
+    ZipFile zip(input_stream);
+    if (zip.getNumEntries() == 0) {
+      error = "Not a zip file, or it's empty.";
+      return false;
+    }
+
+    std::vector<int> banks, presets;
+    bool bank_layout = false;
+    for (int i = 0; i < zip.getNumEntries(); ++i) {
+      String path = zip.getEntry(i)->filename.replaceCharacter('\\', '/');
+      if (!isSafeZipPath(path)) {
+        error = "Zip contains an unsafe path: " + path.toStdString();
+        return false;
+      }
+      if (path.endsWithChar('/') || isMacMetadata(path))
+        continue;
+
+      if (path.endsWithIgnoreCase(String(".") + vital::kBankExtension))
+        banks.push_back(i);
+      else if (path.endsWithIgnoreCase(String(".") + vital::kPresetExtension)) {
+        presets.push_back(i);
+        StringArray parts;
+        parts.addTokens(path, "/", "");
+        if (parts.size() >= 3 && parts[1] == String(LoadSave::kPresetFolderName))
+          bank_layout = true;
+      }
+    }
+
+    if (banks.empty() && presets.empty()) {
+      error = "No Vital presets (.vital) or banks (.vitalbank) in " + zip_name.toStdString() + ".";
+      return false;
+    }
+    if (!root_.createDirectory()) {
+      error = "Couldn't create library folder " + root_.getFullPathName().toStdString();
+      return false;
+    }
+
+    int imported_banks = 0;
+    int imported_presets = 0;
+    std::string last_error;
+
+    // Banks inside the zip: unpack each under its own name and import it.
+    for (int index : banks) {
+      TemporaryFile temp_dir;
+      File folder = temp_dir.getFile();
+      String name = zip.getEntry(index)->filename.replaceCharacter('\\', '/').fromLastOccurrenceOf("/", false, false);
+      File bank = folder.getChildFile(File::createLegalFileName(name));
+      std::string bank_name, bank_error;
+      if (writeEntry(zip, index, bank) && importBank(bank, bank_name, bank_error))
+        ++imported_banks;
+      else
+        last_error = bank_error.empty() ? "Couldn't read " + name.toStdString() : bank_error;
+      folder.deleteRecursively();
+    }
+
+    if (bank_layout) {
+      // Already a bank in all but name: unpack it as Vital would.
+      Result result = zip.uncompressTo(root_, true);
+      if (result.failed())
+        last_error = "Unzipping failed: " + result.getErrorMessage().toStdString();
+      else {
+        StringArray bank_folders;
+        for (int index : presets)
+          bank_folders.addIfNotAlreadyThere(zip.getEntry(index)->filename.replaceCharacter('\\', '/')
+                                                .upToFirstOccurrenceOf("/", false, false));
+        imported_banks += bank_folders.size();
+      }
+    }
+    else if (!presets.empty()) {
+      // Loose presets: a bank named after the zip, keeping their folders. A
+      // single folder wrapping everything (common when zipping a folder) is
+      // dropped.
+      String bank_name = File::createLegalFileName(zip_name.upToLastOccurrenceOf(".", false, false));
+      if (bank_name.isEmpty())
+        bank_name = "Imported";
+      File presets_folder = root_.getChildFile(bank_name).getChildFile(LoadSave::kPresetFolderName);
+
+      std::vector<StringArray> paths;
+      for (int index : presets) {
+        StringArray parts;
+        parts.addTokens(zip.getEntry(index)->filename.replaceCharacter('\\', '/'), "/", "");
+        parts.removeEmptyStrings();
+        paths.push_back(parts);
+      }
+      bool shared_top = paths.size() > 0 && paths[0].size() > 1;
+      for (const StringArray& parts : paths)
+        shared_top = shared_top && parts.size() > 1 && parts[0] == paths[0][0];
+
+      for (size_t i = 0; i < presets.size(); ++i) {
+        StringArray parts = paths[i];
+        if (shared_top)
+          parts.remove(0);
+        File target = presets_folder;
+        for (const String& part : parts)
+          target = target.getChildFile(File::createLegalFileName(part));
+        if (writeEntry(zip, presets[i], target))
+          ++imported_presets;
+        else
+          last_error = "Couldn't write " + target.getFullPathName().toStdString();
+      }
+    }
+
+    if (imported_banks == 0 && imported_presets == 0) {
+      error = last_error.empty() ? "Nothing could be imported." : last_error;
+      return false;
+    }
+
+    summary = "Imported ";
+    if (imported_banks > 0)
+      summary += plural(imported_banks, "bank");
+    if (imported_banks > 0 && imported_presets > 0)
+      summary += " and ";
+    if (imported_presets > 0)
+      summary += plural(imported_presets, "preset");
     return true;
   }
 

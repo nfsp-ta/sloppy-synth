@@ -38,7 +38,8 @@ namespace {
       "  -b, --buffer SAMPLES    Audio buffer size (default: 256)\n"
       "  -p, --patch-index N     Start on patch N of the library (see --list-patches)\n"
       "      --library DIR       Patch library folder (default: $SLOPPY_DATA_DIR or ~/.local/share/sloppy-synth)\n"
-      "      --import-bank FILE  Unpack a .vitalbank into the library before starting\n"
+      "      --import-bank FILE  Unpack a .vitalbank, or a .zip of presets or banks, into\n"
+      "                          the library before starting\n"
       "      --list-patches      List library patches with their program numbers, then exit\n"
       "      --list-devices      List audio and MIDI devices, then exit\n"
       "      --audition NOTE     Play a note (MIDI number or name, e.g. C3) for a second\n"
@@ -325,12 +326,17 @@ int main(int argc, const char* argv[]) {
   sloppy::PatchLibrary library(library_path.isNotEmpty() ? resolve(library_path)
                                                          : sloppy::PatchLibrary::defaultRoot());
   if (import_bank.isNotEmpty()) {
-    std::string bank_name, error;
-    if (!library.importBank(resolve(import_bank), bank_name, error)) {
+    File file = resolve(import_bank);
+    std::string bank_name, summary, error;
+    bool imported = file.hasFileExtension("zip") ? library.importZip(file, file.getFileName(), summary, error)
+                                                 : library.importBank(file, bank_name, error);
+    if (!imported) {
       std::cerr << "Import failed: " << error << "\n";
       return 1;
     }
-    std::cout << "Imported bank \"" << bank_name << "\"\n";
+    if (summary.empty())
+      summary = "Imported bank \"" + bank_name + "\"";
+    std::cout << summary << "\n";
   }
 
   if (list_devices) {
