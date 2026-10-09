@@ -235,6 +235,31 @@ function updatePatchHeader() {
   const meta = [state.patch.style, state.patch.author].filter(Boolean).join(" · ");
   $("patch-meta").textContent = meta;
   document.title = `${state.patch.name || "Init"} · sloppy-synth`;
+  updatePatchWarnings();
+}
+
+// Patches from newer Vital releases can use things this engine doesn't have.
+// The "!" button lists them; a new patch with warnings also gets a toast.
+let warnedPatchKey = "";
+function updatePatchWarnings() {
+  const warnings = state.patch.warnings || [];
+  $("patch-warning").hidden = warnings.length === 0;
+  const list = $("warnings-list");
+  list.replaceChildren(...warnings.map((text) => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    return item;
+  }));
+  if (warnings.length === 0) {
+    if ($("warnings").open) $("warnings").close();
+    warnedPatchKey = "";
+    return;
+  }
+  const key = `${state.patch.index}:${state.patch.name}:${warnings.join("|")}`;
+  if (key !== warnedPatchKey) {
+    warnedPatchKey = key;
+    toast("This patch uses things this engine doesn't have yet. Tap ! for details.");
+  }
 }
 
 // ---- Knobs (macros) -------------------------------------------------------
@@ -1335,6 +1360,7 @@ async function main() {
   $("patch-title").addEventListener("click", () => showView("patches"));
   $("prev-patch").addEventListener("click", () => stepPatch(-1));
   $("next-patch").addEventListener("click", () => stepPatch(1));
+  $("patch-warning").addEventListener("click", () => $("warnings").showModal());
   $("patch-search").addEventListener("input", renderPatchList);
   setupAndroid();
   setupMacroMidiDialog();

@@ -15,6 +15,7 @@
 #include "synth_base.h"
 
 #include <atomic>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -64,11 +65,22 @@ namespace sloppy {
 
       // Loads a .vital patch. Vital patches embed their wavetables, samples
       // and LFO shapes, so a single file is all that's needed.
+      //
+      // Patches from newer Vital releases (1.x) load too. Whatever this
+      // engine doesn't have is skipped or reset, and listed in
+      // getLoadWarnings(). Patches from a newer major version are refused.
       bool loadPatch(const File& file, std::string& error);
       bool loadPatchFromString(const std::string& patch_json, std::string& error);
       void loadInitPatch();
 
-      bool savePatch(const File& file) { return saveToFile(file); }
+      // What the last loaded patch uses that this engine can't play, one
+      // readable line each. Empty when the patch loaded fully.
+      std::vector<std::string> getLoadWarnings() const;
+      // The Vital version that saved the last loaded patch, e.g. "1.6.4".
+      std::string getPatchVersion() const;
+
+      // Saves in Vital 1.5's numbering, so Vital 1.5 and later read it right.
+      bool savePatch(const File& file);
 
       // Parameters, by Vital's internal names (the keys used in .vital files).
       std::vector<std::string> getParameterNames() const;
@@ -119,6 +131,9 @@ namespace sloppy {
       double getSampleRateHz() const { return sample_rate_; }
 
     private:
+      bool loadJson(json state, std::string& error);
+      void checkUnsupported(const json& original, const std::string& version,
+                            std::vector<std::string>& warnings);
       // Moves macros for mapped CCs, and drops those CCs from `midi`.
       void applyMacroMidi(MidiBuffer& midi);
 
@@ -128,6 +143,9 @@ namespace sloppy {
       MidiBuffer incoming_midi_;
       MidiBuffer pending_midi_;
       std::atomic<int> modulation_generation_ { 0 };
+      mutable std::mutex load_info_lock_;
+      std::vector<std::string> load_warnings_;
+      std::string patch_version_;
       MacroMidiMap macro_midi_;
       vital::Value* macro_controls_[MacroMidiMap::kNumMacros] = {};
       MidiBuffer unmapped_midi_;

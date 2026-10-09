@@ -153,6 +153,8 @@ int main(int argc, const char* argv[]) {
     }
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
     std::cerr << "Loaded \"" << engine.getPresetName() << "\" in " << ms.count() << " ms\n";
+    for (const std::string& warning : engine.getLoadWarnings())
+      std::cerr << "  " << warning << "\n";
   }
 
   for (const String& set : options.sets) {

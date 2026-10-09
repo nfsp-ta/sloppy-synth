@@ -229,6 +229,8 @@ namespace {
           std::cout << "[" << index << "] ";
         std::cout << "Patch: " << engine_.getPresetName() << " ("
                   << roundToInt(Time::getMillisecondCounterHiRes() - start) << " ms)\n";
+        for (const std::string& warning : engine_.getLoadWarnings())
+          std::cout << "  " << warning << "\n";
         return true;
       }
 
