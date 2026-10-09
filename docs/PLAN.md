@@ -121,7 +121,11 @@ since most Vital patches route their key controls through them.
   splitting the voice handler across worker threads is the biggest possible
   gain but also the most invasive engine change.
 - Profile the hot paths on the A53 (oscillator, filter, reverb) for
-  NEON-specific improvements.
+  NEON-specific improvements. On x86 the engine now renders as fast as
+  Vital 1.6.4 in the same render path, and Vital 1.5.x is 5 to 10% faster
+  than that. What's left in the profile is spread thin: oscillators,
+  modulation sums, envelopes, the reverb and delay, and processor routing,
+  each a few percent.
 - Longer term, shrink the engine's JUCE use to what it really needs (zip,
   WAV, FFT, strings, files) to make Android and embedded builds lighter.
 
@@ -196,6 +200,9 @@ Decisions so far:
   change, and the control server. `sloppy-render` renders patches to WAV
   and doubles as a benchmark.
 - Cross builds for aarch64 and armhf, tested under qemu in CI.
+- Vital's FFT runs on pffft (`third_party/pffft`) in place of JUCE's
+  portable FFT. Spectral warps on unison voices became 3x faster, and other
+  test patches take 18 to 31% less time.
 - Web UI: play page with macros and a multi-touch keyboard, patch browser,
   parameter pages from `web/layout.json`, and modulation routing.
 - Eight macros, each on a MIDI CC and channel set from the web UI (with

@@ -71,6 +71,21 @@ set(JUCE_MODULE_SOURCES
 find_package(Threads REQUIRED)
 
 # ---------------------------------------------------------------------------
+# pffft: replaces JUCE's portable FFT in Vital's FourierTransform, which is
+# several times slower and dominated the spectral warp's CPU use.
+# ---------------------------------------------------------------------------
+set(PFFFT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/pffft)
+add_library(pffft STATIC ${PFFFT_DIR}/pffft.c ${PFFFT_DIR}/pffft_common.c)
+target_include_directories(pffft PUBLIC ${PFFFT_DIR})
+target_compile_options(pffft PRIVATE ${SLOPPY_ARCH_FLAGS} $<$<NOT:$<CONFIG:Debug>>:-O3>)
+if(ANDROID OR _proc MATCHES "^(arm|aarch64)")
+  target_compile_definitions(pffft PRIVATE PFFFT_ENABLE_NEON=1)
+endif()
+if(NOT MSVC)
+  target_link_libraries(pffft PRIVATE m)
+endif()
+
+# ---------------------------------------------------------------------------
 # sloppy_engine: Vital's synthesis engine + patch loading, no UI.
 # ---------------------------------------------------------------------------
 add_library(sloppy_engine STATIC
@@ -106,6 +121,7 @@ target_include_directories(sloppy_engine PUBLIC
 target_compile_definitions(sloppy_engine PUBLIC
   HEADLESS=1
   NO_AUTH=1
+  SLOPPY_PFFFT=1
   JUCE_STANDALONE_APPLICATION=1
   JUCE_USE_XRANDR=0
   $<$<CONFIG:Debug>:DEBUG=1 _DEBUG=1>
@@ -124,7 +140,7 @@ target_compile_options(sloppy_engine PUBLIC
   -Wno-deprecated-declarations
 )
 
-target_link_libraries(sloppy_engine PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(sloppy_engine PUBLIC pffft Threads::Threads ${CMAKE_DL_LIBS})
 
 # juce_audio_devices changes how Vital's MidiManager is declared (it stubs
 # out MidiInput when the module is missing), so it has to be on or off for
