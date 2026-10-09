@@ -105,6 +105,42 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 .status.connected { background: var(--accent-2); }
 
+/* Shown when the patch uses things this engine doesn't have yet. */
+.patch-warning {
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 17px;
+  font-weight: 700;
+  background: var(--warn);
+  color: var(--bg);
+}
+.patch-warning:active { background: var(--warn); color: var(--bg); opacity: 0.8; }
+
+.warnings {
+  width: min(480px, calc(100% - 32px));
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+}
+.warnings::backdrop { background: rgb(0 0 0 / 0.5); }
+.warnings h2 { margin: 0 0 8px; font-size: 17px; }
+.warnings ul { margin: 0; padding-left: 20px; overflow-wrap: anywhere; }
+.warnings li + li { margin-top: 6px; }
+.warnings form { display: flex; justify-content: flex-end; margin-top: 16px; }
+.warnings-close {
+  min-width: 88px;
+  min-height: 40px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
 /* ---- Tabs: bottom bar on phones, top strip on wide screens ------------ */
 .tabs {
   order: 3;

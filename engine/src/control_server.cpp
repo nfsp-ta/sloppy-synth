@@ -397,6 +397,8 @@ namespace sloppy {
         { "author", engine.getAuthor().toStdString() },
         { "style", engine.getStyle().toStdString() },
         { "comments", engine.getComments().toStdString() },
+        { "version", engine.getPatchVersion() },
+        { "warnings", engine.getLoadWarnings() },
       } },
       { "macros", macros },
       { "values", values },
