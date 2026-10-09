@@ -58,14 +58,16 @@ Pi Zero 2 W, Pi 3 or newer.
 - Everything else sounds the same: 73 test patches covering every filter
   model and style, oscillator distortion, spectral warp, unison stack and
   effect render within 0.5 dB of 1.6.4.
-- 1.6.4 is faster: rendering the same patches on x86_64, it takes 0.6 to
-  0.8 of our time for simple patches, and a quarter of it for a spectral
-  warp on a 16-voice unison oscillator (60 s of audio: 1.3 s against
-  5.0 s). Building our engine with clang or AVX only gains about 10%, so
-  most of the gain is in Vital's code. Start with the spectral warp per
-  unison voice, then profile the rest; see step 8. The same comparison
-  can be repeated with Vital's own `--headless --render` against
-  `SynthBase::renderAudioToFile`, which both engines share.
+- Vital got faster in 1.5.1 and has stayed about the same since (1.6.x is
+  5 to 10% slower than 1.5.x). Timed through each release's plugin, 1.5.1
+  renders simple patches and effects about 1.5x faster than 1.0.x, two
+  16-voice oscillators about 2x, and a spectral warp on a 16-voice unison
+  oscillator 3.7x. This engine matches 1.0.x. Building it with clang or
+  AVX only gains about 10%, so most of the gain is in Vital's code. Start
+  with the spectral warp per unison voice, then profile the rest; see
+  step 8. Vital's own `--headless --render` uses
+  `SynthBase::renderAudioToFile`, which both engines share, so the same
+  comparison can be repeated (it crashes in 1.5.x; use the plugins).
 
 ### 3. Android
 
@@ -125,8 +127,8 @@ most Vital patches route their key controls through them.
 
 ### 8. Performance work
 
-- Spectral warps on unison oscillators: Vital 1.6.4 is about four times
-  faster here than this engine (see step 2). Work out a faster way from
+- Spectral warps on unison oscillators: Vital 1.5 and later are about four
+  times faster here than this engine (see step 2). Work out a faster way from
   the public 1.0.6 code and measurements alone.
 - Spread voices over several cores. Vital processes voices in one thread;
   splitting the voice handler across worker threads is the biggest possible
