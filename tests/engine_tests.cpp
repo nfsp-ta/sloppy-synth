@@ -4,6 +4,7 @@
  * Licensed under the GNU General Public License v3 or later, see LICENSE.
  */
 #include "JuceHeader.h"
+#include "json/json.h"
 #include "patch_library.h"
 #include "sloppy_engine.h"
 
@@ -327,6 +328,177 @@ namespace {
     CHECK(!engine.removeModulation("macro_control_1", "osc_1_level"));
   }
 
+
+  // Vital patches have 4 macros; sloppy-synth has 8. Macros 5-8 use Vital's
+  // own key names, so Vital still loads the file and skips what it lacks.
+  void testEightMacros() {
+    TemporaryFile temp(".vital");
+    sloppy::Engine engine;
+    std::string error;
+    CHECK(engine.loadPatch(fixture("test_bass.vital"), error));
+    std::vector<std::string> sources = engine.getModulationSources();
+    for (int i = 1; i <= 8; ++i) {
+      std::string name = "macro_control_" + std::to_string(i);
+      CHECK(engine.hasParameter(name));
+      CHECK(std::find(sources.begin(), sources.end(), name) != sources.end());
+    }
+    CHECK(engine.getParameter("macro_control_6") == 0.0f);
+    CHECK(engine.getMacroName(5) == "MACRO 6");
+
+    CHECK(engine.getVitalIncompatibilities().empty());
+    CHECK(engine.addModulation("macro_control_6", "osc_1_level", -1.0f, error));
+    CHECK(engine.addModulation("macro_control_4", "osc_2_level", 0.5f, error));  // Vital has macro 4
+    std::vector<std::string> problems = engine.getVitalIncompatibilities();
+    CHECK(problems.size() == 1);
+    CHECK(problems.size() == 1 && problems[0].find("Macro 6") == 0);
+    engine.setParameter("macro_control_6", 0.7f);
+    CHECK(engine.savePatch(temp.getFile()));
+
+    json saved = json::parse(temp.getFile().loadFileAsString().toStdString());
+    json settings = saved["settings"];
+    for (int i = 1; i <= 4; ++i) {
+      CHECK(settings.count("macro_control_" + std::to_string(i)) == 1);
+      CHECK(saved.count("macro" + std::to_string(i)) == 1);
+    }
+    CHECK(settings["macro_control_6"] == 0.7f);
+    CHECK(saved["macro6"] == "MACRO 6");
+    CHECK(settings["modulations"].size() == 64);
+    int macro_6_routings = 0;
+    for (const json& modulation : settings["modulations"]) {
+      if (modulation["source"] == "macro_control_6" && modulation["destination"] == "osc_1_level")
+        ++macro_6_routings;
+    }
+    CHECK(macro_6_routings == 1);
+
+    sloppy::Engine reloaded;
+    CHECK(reloaded.loadPatch(temp.getFile(), error));
+    CHECK(std::abs(reloaded.getParameter("macro_control_6") - 0.7f) < 1e-6f);
+    CHECK(reloaded.getModulations().size() == engine.getModulations().size());
+    CHECK(reloaded.getConnectionIndex("macro_control_6", "osc_1_level") >= 0);
+  }
+
+  // Runs one block with `messages` and returns what's left of the MIDI
+  // buffer afterwards (mapped CCs are taken out).
+  MidiBuffer processMidi(sloppy::Engine& engine, const std::vector<MidiMessage>& messages) {
+    AudioSampleBuffer buffer(2, 256);
+    MidiBuffer midi;
+    for (const MidiMessage& message : messages)
+      midi.addEvent(message, 0);
+    engine.process(buffer, midi);
+    return midi;
+  }
+
+  int countControllers(const MidiBuffer& midi, int cc) {
+    int count = 0;
+    for (const MidiMessageMetadata event : midi) {
+      MidiMessage message = event.getMessage();
+      if (message.isController() && message.getControllerNumber() == cc)
+        ++count;
+    }
+    return count;
+  }
+
+  void testMacroMidi() {
+    sloppy::Engine engine;
+    sloppy::MacroMidiMap& map = engine.getMacroMidi();
+    std::string error;
+
+    // Defaults: macros 1-8 on CC 21-28, any channel.
+    for (int i = 0; i < 8; ++i) {
+      CHECK(map.get(i).cc == 21 + i);
+      CHECK(map.get(i).channel == 0);
+    }
+    MidiBuffer left = processMidi(engine, { MidiMessage::controllerEvent(5, 21, 127),
+                                            MidiMessage::controllerEvent(1, 28, 0),
+                                            MidiMessage::noteOn(1, 60, 0.8f) });
+    CHECK(engine.getParameter("macro_control_1") == 1.0f);
+    CHECK(engine.getParameter("macro_control_8") == 0.0f);
+    CHECK(countControllers(left, 21) == 0);
+    CHECK(left.getNumEvents() == 1);  // the note is still there
+
+    // One channel only.
+    CHECK(map.set(1, { 30, 2 }, error));
+    processMidi(engine, { MidiMessage::controllerEvent(1, 30, 64) });
+    CHECK(engine.getParameter("macro_control_2") == 0.0f);
+    processMidi(engine, { MidiMessage::controllerEvent(2, 30, 127) });
+    CHECK(engine.getParameter("macro_control_2") == 1.0f);
+
+    // A macro on the mod wheel CC takes it over; unmapped CCs pass through.
+    CHECK(map.set(2, { 1, 0 }, error));
+    left = processMidi(engine, { MidiMessage::controllerEvent(1, 1, 127), MidiMessage::controllerEvent(1, 7, 100) });
+    CHECK(engine.getParameter("macro_control_3") == 1.0f);
+    CHECK(countControllers(left, 1) == 0);
+    CHECK(countControllers(left, 7) == 1);
+
+    // Two macros on one CC both move.
+    CHECK(map.set(4, { 1, 0 }, error));
+    processMidi(engine, { MidiMessage::controllerEvent(1, 1, 0) });
+    CHECK(engine.getParameter("macro_control_3") == 0.0f);
+    CHECK(engine.getParameter("macro_control_5") == 0.0f);
+    processMidi(engine, { MidiMessage::controllerEvent(1, 1, 127) });
+    CHECK(engine.getParameter("macro_control_5") == 1.0f);
+
+    // Out of range.
+    CHECK(!map.set(0, { 120, 0 }, error));
+    CHECK(!map.set(0, { 10, 17 }, error));
+    CHECK(!map.set(8, { 10, 0 }, error));
+    CHECK(map.set(0, { -1, 0 }, error));  // none
+    processMidi(engine, { MidiMessage::controllerEvent(1, 21, 0) });
+    CHECK(engine.getParameter("macro_control_1") == 1.0f);
+
+    // MIDI learn: the next CC is taken, on any channel.
+    int generation = map.getGeneration();
+    map.learn(3);
+    CHECK(map.getLearning() == 3);
+    processMidi(engine, { MidiMessage::controllerEvent(7, 50, 127) });
+    CHECK(map.getLearning() == -1);
+    CHECK(map.get(3).cc == 50);
+    CHECK(map.get(3).channel == 0);
+    CHECK(map.getGeneration() != generation);
+    CHECK(engine.getParameter("macro_control_4") == 1.0f);
+    // A macro on one channel follows the learned CC's channel.
+    map.learn(1);
+    processMidi(engine, { MidiMessage::controllerEvent(9, 51, 0) });
+    CHECK(map.get(1).cc == 51);
+    CHECK(map.get(1).channel == 9);
+
+    map.resetToDefaults();
+    CHECK(map.get(1).cc == 22 && map.get(1).channel == 0);
+  }
+
+  void testMacroMidiSettings() {
+    TemporaryFile temp(".json");
+    File file = temp.getFile();
+    std::string error;
+    {
+      sloppy::Engine engine;
+      engine.setSettingsFile(file);  // doesn't exist yet: defaults
+      CHECK(engine.getMacroMidi().get(0).cc == 21);
+      CHECK(engine.getMacroMidi().set(0, { 74, 3 }, error));
+      CHECK(engine.saveSettings());
+    }
+    // Other settings in the file survive a save.
+    json settings = json::parse(file.loadFileAsString().toStdString());
+    settings["something_else"] = 1;
+    file.replaceWithText(settings.dump());
+    {
+      sloppy::Engine engine;
+      engine.setSettingsFile(file);
+      CHECK(engine.getMacroMidi().get(0).cc == 74);
+      CHECK(engine.getMacroMidi().get(0).channel == 3);
+      CHECK(engine.getMacroMidi().get(1).cc == 22);
+      CHECK(engine.saveSettings());
+    }
+    settings = json::parse(file.loadFileAsString().toStdString());
+    CHECK(settings["something_else"] == 1);
+
+    // A broken file falls back to defaults.
+    file.replaceWithText("{ not json");
+    sloppy::Engine engine;
+    engine.setSettingsFile(file);
+    CHECK(engine.getMacroMidi().get(0).cc == 21);
+  }
+
   // Builds a zip from (path in zip, file) pairs.
   File makeZip(const File& folder, const String& name, const std::vector<std::pair<String, File>>& entries) {
     ZipFile::Builder builder;
@@ -442,6 +614,9 @@ int main() {
     { "bank import", testBankImport },
     { "nested patch folders", testNestedFolders },
     { "modulation matrix", testModulationMatrix },
+    { "eight macros", testEightMacros },
+    { "macro MIDI CCs", testMacroMidi },
+    { "macro MIDI settings file", testMacroMidiSettings },
     { "bank import rejects zip slip", testBankImportRejectsZipSlip },
     { "zip import", testZipImport },
   };

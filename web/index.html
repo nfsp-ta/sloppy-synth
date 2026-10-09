@@ -32,6 +32,7 @@
   <main>
     <section class="view" id="view-play" data-view="play">
       <div class="macros" id="macros"></div>
+      <p class="vital-warning" id="vital-warning" role="status" hidden></p>
       <div class="play-controls">
         <button class="pill" id="octave-down" aria-label="Octave down" title="Octave down (Z)">Oct &minus;</button>
         <span class="octave" id="octave-label">C3</span>
@@ -62,6 +63,24 @@
       <div class="controls" id="controls"></div>
     </section>
   </main>
+
+  <dialog class="sheet" id="macro-midi" aria-labelledby="mm-title">
+    <h2 id="mm-title">Macro MIDI</h2>
+    <label class="field">
+      <span>Controller (CC)</span>
+      <select id="mm-cc"></select>
+    </label>
+    <label class="field">
+      <span>Channel</span>
+      <select id="mm-channel"></select>
+    </label>
+    <p class="sheet-note" id="mm-note"></p>
+    <div class="sheet-buttons">
+      <button class="pill" id="mm-learn" aria-pressed="false">Learn</button>
+      <button class="pill" id="mm-reset" title="Put every macro back on its default CC">Reset all</button>
+      <button class="pill primary" id="mm-done">Done</button>
+    </div>
+  </dialog>
 
   <div class="toast" id="toast" role="status" hidden></div>
 

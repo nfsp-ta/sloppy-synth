@@ -42,6 +42,8 @@ namespace {
       AndroidSynth(const File& library_root, const File& web_root) :
           library_(library_root), web_root_(web_root) {
         library_root.createDirectory();
+        // Device settings (macro MIDI CCs) sit next to the library.
+        engine_.setSettingsFile(library_root.getSiblingFile("settings.json"));
         rescan();
         for (int channel = 0; channel < kChannels; ++channel)
           planar_[channel].resize(kMaxFrames);

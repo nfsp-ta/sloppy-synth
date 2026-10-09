@@ -49,6 +49,8 @@ namespace {
       "                          on the same network can connect; 127.0.0.1 for local only)\n"
       "      --web-root DIR      Web UI files (default: the web folder next to the program)\n"
       "      --no-web            Don't serve the web UI\n"
+      "      --settings FILE     Device settings, such as macro MIDI CCs (default:\n"
+      "                          $XDG_CONFIG_HOME or ~/.config, then sloppy-synth/settings.json)\n"
       "  -h, --help              Show this help\n"
       "\n"
       "MIDI program change N loads library patch N (bank select MSB adds 128 * MSB).\n"
@@ -62,8 +64,9 @@ namespace {
   class Player : public AudioIODeviceCallback, public MidiInputCallback, public sloppy::ControlHost,
                  private Timer {
     public:
-      Player(sloppy::PatchLibrary& library) : library_(library) {
+      Player(sloppy::PatchLibrary& library, const File& settings_file) : library_(library) {
         patches_ = library_.listPatches();
+        engine_.setSettingsFile(settings_file);
       }
 
       ~Player() override {
@@ -245,6 +248,13 @@ namespace {
       std::atomic<int> bank_msb_ { 0 };
   };
 
+  File defaultSettingsFile() {
+    String xdg = SystemStats::getEnvironmentVariable("XDG_CONFIG_HOME", "");
+    File config = xdg.isNotEmpty() ? File(xdg)
+                                   : File::getSpecialLocation(File::userHomeDirectory).getChildFile(".config");
+    return config.getChildFile("sloppy-synth/settings.json");
+  }
+
   File findWebRoot() {
     File exe = File::getSpecialLocation(File::currentExecutableFile).getParentDirectory();
     const File candidates[] = {
@@ -286,6 +296,7 @@ int main(int argc, const char* argv[]) {
   std::cout << std::unitbuf;
 
   String patch_path, device_name, library_path, import_bank, audition_note, http_bind, web_root_path;
+  String settings_path;
   int http_port = 8080;
   bool http_port_given = false;
   bool serve_web = true;
@@ -319,6 +330,7 @@ int main(int argc, const char* argv[]) {
     else if (arg == "--http-bind") http_bind = next();
     else if (arg == "--web-root") web_root_path = next();
     else if (arg == "--no-web") serve_web = false;
+    else if (arg == "--settings") settings_path = next();
     else if (arg.startsWith("-")) { std::cerr << "Unknown option " << arg << "\n"; printUsage(); return 2; }
     else patch_path = arg;
   }
@@ -349,7 +361,7 @@ int main(int argc, const char* argv[]) {
 
   int exit_code = 0;
   {
-    Player player(library);
+    Player player(library, settings_path.isNotEmpty() ? resolve(settings_path) : defaultSettingsFile());
 
     if (list_patches) {
       int index = 0;

@@ -27,7 +27,9 @@ namespace vital {
   constexpr int kNumOscillatorWaveFrames = 257;
   constexpr int kNumEnvelopes = 6;
   constexpr int kNumRandomLfos = 4;
-  constexpr int kNumMacros = 4;
+  // sloppy-synth: 8 macros instead of Vital's 4. Patches keep Vital's key names
+  // (macro_control_5..8, macro5..8), which Vital ignores when it loads them.
+  constexpr int kNumMacros = 8;
   constexpr int kNumFilters = 2;
   constexpr int kNumFormants = 4;
   constexpr int kNumChannels = 2;

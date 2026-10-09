@@ -32,9 +32,26 @@ Pi Zero 2 W, Pi 3 or newer.
 - Themes: a few built-in ones plus user-made themes. All colours are
   already CSS variables at the top of `web/style.css`, so a theme can be a
   file of those variables that is picked, imported and shared from the UI.
+- Control configuration files: export and import one file holding a
+  device's control setup (macro CC and channel mappings, the chosen UI
+  theme, and later things like per-device limits), to move a setup to
+  another device or share it. Not part of patches (Ashley, 2026-10-08).
+  The macro mappings already live in a per-device `settings.json`, so the
+  export can start as a copy of that file plus the theme.
 
 ### 2. Patches and banks
 
+- Save patches from the UI (the engine can save; no UI does yet). When the
+  patch uses something Vital can't play, the save warns first. Today that
+  is any routing from macros 5 to 8: Vital still opens the file but drops
+  those routings (and macros 5 to 8 themselves), so the patch sounds
+  different there. The engine already reports this
+  (`Engine::getVitalIncompatibilities`, sent as `vital_warnings` with
+  `modulations`), and the play page shows it.
+- Deferred decision (Ashley, 2026-10-08): what someone can do about such a
+  patch. Options so far: list what doesn't fit; an option to strip it
+  automatically, for example a "Save for Vital" copy; a standalone patch
+  converter; or something else.
 - Browse by Vital's style tag; favourites.
 - Import `.vitaltable` wavetables, `.vitallfo` shapes and samples into
   patches from the UI.
@@ -122,8 +139,8 @@ OLED or 320x240 SPI screen, 4 to 8 rotary encoders with push buttons (read
 through `libgpiod`), and a page/menu layout: Oscillators, Filters,
 Envelopes, LFOs, Effects, Macros, Patch browser. Each page shows four to
 eight parameters mapped to the encoders, taken from `web/layout.json` so it
-stays consistent with the web UI. Macros 1 to 4 get a permanent spot, since
-most Vital patches route their key controls through them.
+stays consistent with the web UI. The eight macros get a permanent spot,
+since most Vital patches route their key controls through them.
 
 ### 8. Performance work
 
@@ -182,6 +199,18 @@ Decisions so far:
   (Ashley, 2026-10-07).
 - Android: a small Kotlin app with the engine as an NDK library, rather
   than a full JUCE Android app.
+- Macros: eight instead of Vital's four (Ashley, 2026-10-08). Macros 5 to 8
+  are saved under Vital's own key names (`macro_control_5`, `macro5`...).
+  Vital patches load and save as before. Vital can open sloppy-synth's
+  patches too (checked with an unmodified 4-macro build), but skips
+  macros 5 to 8 and their routings.
+- MIDI: rather than MIDI learn on every control, only the macros follow
+  MIDI CCs (Ashley, 2026-10-08). Defaults are CC 21 to 28 on any channel:
+  undefined in the MIDI spec, clear of the CCs Vital reacts to (mod wheel,
+  pedals, MPE slide, bank select), and what many small controllers' knobs
+  send. The CC and channel per macro belong to the device, not the patch,
+  and are kept in a per-device settings file (`~/.config/sloppy-synth` on
+  Linux, next to the library on Android).
 - Scope: a straight Vital port. Microcontroller synths (Pico, FM-1) can't
   hold Vital's engine and belong in separate projects.
 
@@ -200,6 +229,8 @@ Decisions so far:
 - Cross builds for aarch64 and armhf, tested under qemu in CI.
 - Web UI: play page with macros and a multi-touch keyboard, patch browser,
   parameter pages from `web/layout.json`, and modulation routing.
+- Eight macros, each on a MIDI CC and channel set from the web UI (with
+  MIDI learn), saved per device.
 - Android app: engine over NDK, Oboe audio, USB and virtual MIDI, web UI in
   a WebView, background service, patch and bank import. CI builds the APK
   and smoke-tests it on two emulator API levels.

@@ -1,6 +1,7 @@
 {
   "comment": "Which parameters each edit page shows, in order. {n} is replaced by the instance number. \"source\" names the modulation source a page edits, so the page can list where it is routed. Shared by every sloppy-synth UI (web, and later the encoder UI), so keep pages short enough to page through with a few knobs.",
-  "macros": ["macro_control_1", "macro_control_2", "macro_control_3", "macro_control_4"],
+  "macros": ["macro_control_1", "macro_control_2", "macro_control_3", "macro_control_4",
+             "macro_control_5", "macro_control_6", "macro_control_7", "macro_control_8"],
   "pages": [
     {
       "id": "osc", "title": "Osc", "instances": [1, 2, 3], "switch": "osc_{n}_on",

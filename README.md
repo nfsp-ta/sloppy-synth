@@ -93,6 +93,13 @@ the next group of 128). The library lives in `~/.local/share/sloppy-synth`
 unless `--library` or `$SLOPPY_DATA_DIR` says otherwise; it can also point
 at an existing Vital data folder.
 
+The eight macro knobs follow MIDI CCs 21 to 28 on any channel. Tap the CC
+under a knob in the web UI to pick another CC or channel, or press Learn and
+move a control on your keyboard. A CC given to a macro only moves that macro.
+These settings belong to the device, not the patch, and are saved in
+`~/.config/sloppy-synth/settings.json` (`--settings` picks another file; on
+Android they sit next to the library).
+
 On a Pi, `sloppy-render` reporting well above `1x real time` for the number
 of notes you want to play is a good sign the patch will run live.
 

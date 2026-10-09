@@ -11,6 +11,7 @@
 #pragma once
 
 #include "JuceHeader.h"
+#include "macro_midi.h"
 #include "synth_base.h"
 
 #include <atomic>
@@ -104,8 +105,25 @@ namespace sloppy {
       bool addModulation(const std::string& source, const std::string& destination, float amount,
                          std::string& error);
       bool removeModulation(const std::string& source, const std::string& destination);
+      // What in the current patch Vital itself can't play. Vital still opens
+      // the file but leaves these out. Today that is routings from macros
+      // 5 to 8 (Vital has 4 macros). One line per problem, for showing to
+      // people; empty when Vital would play the patch as it is.
+      static constexpr int kVitalMacros = 4;
+      std::vector<std::string> getVitalIncompatibilities();
       // Changes whenever routings are added or removed, or a patch is loaded.
       int getModulationGeneration() const { return modulation_generation_; }
+
+      // MIDI CC assignments for the macros. Matching CCs move the macro and
+      // are not passed on to Vital, so a macro on CC 1 replaces the mod
+      // wheel rather than doubling it.
+      MacroMidiMap& getMacroMidi() { return macro_midi_; }
+
+      // Device settings (macro CC assignments) live in this JSON file. Loads
+      // it if it exists; saveSettings() writes it. With no file set, settings
+      // are kept in memory only.
+      void setSettingsFile(const File& file);
+      bool saveSettings();
 
       void allNotesOff();
       void setBpm(float bpm);
@@ -116,6 +134,8 @@ namespace sloppy {
       bool loadJson(json state, std::string& error);
       void checkUnsupported(const json& original, const std::string& version,
                             std::vector<std::string>& warnings);
+      // Moves macros for mapped CCs, and drops those CCs from `midi`.
+      void applyMacroMidi(MidiBuffer& midi);
 
       double sample_rate_ = 44100.0;
       double seconds_time_ = 0.0;
@@ -126,6 +146,11 @@ namespace sloppy {
       mutable std::mutex load_info_lock_;
       std::vector<std::string> load_warnings_;
       std::string patch_version_;
+      MacroMidiMap macro_midi_;
+      vital::Value* macro_controls_[MacroMidiMap::kNumMacros] = {};
+      MidiBuffer unmapped_midi_;
+      File settings_file_;
+      CriticalSection settings_lock_;
 
       JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)
   };
