@@ -18,8 +18,69 @@
 
 #include "JuceHeader.h"
 
+#if SLOPPY_PFFFT
+#include <alloca.h>
+#include <cstdint>
+#include "pffft.h"
+#endif
+
 namespace vital {
-  #if INTEL_IPP
+  #if SLOPPY_PFFFT
+  // sloppy-synth: pffft in place of JUCE's portable FFT, which is several times
+  // slower and was most of the CPU on spectral warps. Same layout as the IPP
+  // branch below: bins as complex pairs, Nyquist at data[size_], unscaled
+  // forward and 1/N inverse. The negative frequencies are filled in too, as
+  // JUCE's version did.
+
+  class FourierTransform {
+    public:
+      FourierTransform(int bits) : size_(1 << bits), setup_(pffft_new_setup(size_, PFFFT_REAL)) { }
+      ~FourierTransform() { pffft_destroy_setup(setup_); }
+
+      void transformRealForward(float* data) {
+        transform(data, PFFFT_FORWARD);
+        data[size_] = data[1];
+        data[size_ + 1] = 0.0f;
+        data[1] = 0.0f;
+        for (int i = size_ / 2 + 1; i < size_; ++i) {
+          data[2 * i] = data[2 * (size_ - i)];
+          data[2 * i + 1] = -data[2 * (size_ - i) + 1];
+        }
+      }
+
+      void transformRealInverse(float* data) {
+        data[1] = data[size_];
+        transform(data, PFFFT_BACKWARD);
+        float multiplier = 1.0f / size_;
+        for (int i = 0; i < size_; ++i)
+          data[i] *= multiplier;
+        memset(data + size_, 0, size_ * sizeof(float));
+      }
+
+    private:
+      static constexpr uintptr_t kAlignment = 16;
+
+      // The work buffer goes on the stack (null work pointer) because FFT<>
+      // instances are shared between threads.
+      void transform(float* data, pffft_direction_t direction) {
+        if ((reinterpret_cast<uintptr_t>(data) & (kAlignment - 1)) == 0) {
+          pffft_transform_ordered(setup_, data, data, nullptr, direction);
+          return;
+        }
+        uintptr_t space = reinterpret_cast<uintptr_t>(alloca(size_ * sizeof(float) + kAlignment));
+        float* aligned = reinterpret_cast<float*>((space + kAlignment - 1) & ~(kAlignment - 1));
+        memcpy(aligned, data, size_ * sizeof(float));
+        pffft_transform_ordered(setup_, aligned, aligned, nullptr, direction);
+        memcpy(data, aligned, size_ * sizeof(float));
+      }
+
+      int size_;
+      PFFFT_Setup* setup_;
+
+      JUCE_LEAK_DETECTOR(FourierTransform)
+  };
+
+  #elif INTEL_IPP
 
   #include "ipps.h"
 

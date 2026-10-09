@@ -75,15 +75,8 @@ Pi Zero 2 W, Pi 3 or newer.
 - Everything else sounds the same: 73 test patches covering every filter
   model and style, oscillator distortion, spectral warp, unison stack and
   effect render within 0.5 dB of 1.6.4.
-- Vital got faster in 1.5.1 and has stayed about the same since (1.6.x is
-  5 to 10% slower than 1.5.x). Timed through each release's plugin, 1.5.1
-  renders simple patches and effects about 1.5x faster than 1.0.x, two
-  16-voice oscillators about 2x, and a spectral warp on a 16-voice unison
-  oscillator 3.7x. This engine matches 1.0.x. Building it with clang or
-  AVX only gains about 10%, so most of the gain is in Vital's code. Start
-  with the spectral warp per unison voice, then profile the rest; see
-  step 8. Vital's own `--headless --render` uses
-  `SynthBase::renderAudioToFile`, which both engines share, so the same
+- Speed now matches 1.6.4 (see step 8). Vital's own `--headless --render`
+  uses `SynthBase::renderAudioToFile`, which both engines share, so the
   comparison can be repeated (it crashes in 1.5.x; use the plugins).
 
 ### 3. Android
@@ -144,14 +137,15 @@ since most Vital patches route their key controls through them.
 
 ### 8. Performance work
 
-- Spectral warps on unison oscillators: Vital 1.5 and later are about four
-  times faster here than this engine (see step 2). Work out a faster way from
-  the public 1.0.6 code and measurements alone.
 - Spread voices over several cores. Vital processes voices in one thread;
   splitting the voice handler across worker threads is the biggest possible
   gain but also the most invasive engine change.
 - Profile the hot paths on the A53 (oscillator, filter, reverb) for
-  NEON-specific improvements.
+  NEON-specific improvements. On x86 the engine now renders as fast as
+  Vital 1.6.4 in the same render path, and Vital 1.5.x is 5 to 10% faster
+  than that. What's left in the profile is spread thin: oscillators,
+  modulation sums, envelopes, the reverb and delay, and processor routing,
+  each a few percent.
 - Longer term, shrink the engine's JUCE use to what it really needs (zip,
   WAV, FFT, strings, files) to make Android and embedded builds lighter.
 
@@ -227,6 +221,9 @@ Decisions so far:
   change, and the control server. `sloppy-render` renders patches to WAV
   and doubles as a benchmark.
 - Cross builds for aarch64 and armhf, tested under qemu in CI.
+- Vital's FFT runs on pffft (`third_party/pffft`) in place of JUCE's
+  portable FFT. Spectral warps on unison voices became 3x faster, and other
+  test patches take 18 to 31% less time.
 - Web UI: play page with macros and a multi-touch keyboard, patch browser,
   parameter pages from `web/layout.json`, and modulation routing.
 - Eight macros, each on a MIDI CC and channel set from the web UI (with

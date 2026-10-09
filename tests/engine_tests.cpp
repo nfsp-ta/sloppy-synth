@@ -4,6 +4,7 @@
  * Licensed under the GNU General Public License v3 or later, see LICENSE.
  */
 #include "JuceHeader.h"
+#include "fourier_transform.h"
 #include "json/json.h"
 #include "patch_library.h"
 #include "sloppy_engine.h"
@@ -596,11 +597,57 @@ namespace {
     CHECK(library.listPatches().empty());
     temp_dir.getFile().deleteRecursively();
   }
+
+  // Vital's spectral code expects the IPP-style layout: complex bins, DC's
+  // imaginary slot zeroed, Nyquist at data[size], unscaled forward and 1/N
+  // inverse.
+  void checkFourierTransform(vital::FourierTransform& transform, float* data) {
+    constexpr int kBits = 11;
+    constexpr int kSize = 1 << kBits;
+    const double pi = MathConstants<double>::pi;
+    std::vector<float> signal(kSize);
+    for (int i = 0; i < kSize; ++i) {
+      signal[i] = static_cast<float>(1.0 + std::cos(2.0 * pi * 3.0 * i / kSize) +
+                                     0.5 * std::sin(2.0 * pi * 5.0 * i / kSize) + 0.25 * std::cos(pi * i));
+    }
+    std::copy(signal.begin(), signal.end(), data);
+    std::fill(data + kSize, data + 2 * kSize, 123.0f);
+
+    transform.transformRealForward(data);
+    auto near = [](float value, double expected) { return std::abs(value - expected) < 0.01 * kSize / 1024.0; };
+    CHECK(near(data[0], kSize));
+    CHECK(near(data[1], 0.0));
+    CHECK(near(data[2 * 3], kSize / 2.0));
+    CHECK(near(data[2 * 3 + 1], 0.0));
+    CHECK(near(data[2 * 5], 0.0));
+    CHECK(near(data[2 * 5 + 1], -kSize / 4.0));
+    CHECK(near(data[kSize], kSize / 4.0));
+    CHECK(near(data[kSize + 1], 0.0));
+    CHECK(near(data[2 * (kSize - 3)], kSize / 2.0));
+    CHECK(near(data[2 * (kSize - 5) + 1], kSize / 4.0));
+    CHECK(near(data[2 * 7], 0.0));
+
+    transform.transformRealInverse(data);
+    float max_error = 0.0f;
+    for (int i = 0; i < kSize; ++i)
+      max_error = std::max(max_error, std::abs(data[i] - signal[i]));
+    CHECK(max_error < 1e-4f);
+    CHECK(std::all_of(data + kSize, data + 2 * kSize, [](float value) { return std::abs(value) < 1e-4f; }));
+  }
+
+  void testFourierTransform() {
+    constexpr int kBits = 11;
+    alignas(16) static float buffer[2 * (1 << kBits) + 4];
+    checkFourierTransform(*vital::FFT<kBits>::transform(), buffer);
+    vital::FourierTransform own(kBits);
+    checkFourierTransform(own, buffer + 1);
+  }
 }
 
 int main() {
   struct Test { const char* name; void (*run)(); };
   const Test tests[] = {
+    { "Fourier transform", testFourierTransform },
     { "init patch makes sound", testInitPatchMakesSound },
     { "silent without notes", testSilentWithoutNotes },
     { "load patch", testLoadPatch },
